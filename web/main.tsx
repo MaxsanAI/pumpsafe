@@ -8,7 +8,7 @@ type Stats = { scanned: number; safe: number; blocked: number };
 type Token = {
   mint: string; name: string; symbol: string; score: number; source: string; detectedAt: number;
   mintAuthorityDisabled: boolean; freezeAuthorityDisabled: boolean; top10Pct: number;
-  lpVerified: boolean; bundleRisk: number; devRisk: number; liquidityUsd: number | null; reason: string;
+  lpVerified: boolean; bundleRisk: number; devRisk: number; liquidityUsd: number | null; reason: string; recommendation?: boolean;
 };
 
 const short = (v: string) => `${v.slice(0, 5)}…${v.slice(-5)}`;

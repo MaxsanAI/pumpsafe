@@ -93,7 +93,7 @@ async function launchClusterRisk(env: Env, candidate: TokenCandidate, owners: st
   } catch { return { bundleRisk: 55, devRisk: 55 }; }
 }
 
-export async function auditToken(env: Env, candidate: TokenCandidate): Promise<AuditResult> {
+export async function auditToken(env: Env, candidate: TokenCandidate, deepScan = false): Promise<AuditResult> {
   const mint = await rpc<ParsedAccount>(env.SOLANA_RPC_URL, 'getAccountInfo', [candidate.mint, { encoding: 'jsonParsed', commitment: 'finalized' }]);
   const info = mint.value?.data?.parsed?.info;
   if (!info) throw new Error('Mint account not found or unsupported token program');
@@ -102,7 +102,7 @@ export async function auditToken(env: Env, candidate: TokenCandidate): Promise<A
   const holders = await holderConcentration(env, candidate.mint);
   const liq = await dexLiquidity(candidate.mint);
   const lpVerified = await verifyLp(env, candidate.mint, liq.usd);
-  const risks = await launchClusterRisk(env, candidate, holders.owners);
+  const risks = deepScan ? await launchClusterRisk(env, candidate, holders.owners) : { bundleRisk: 0, devRisk: 0 };
 
   let score = 100;
   score -= mintAuthorityDisabled ? 0 : 30;
@@ -115,11 +115,11 @@ export async function auditToken(env: Env, candidate: TokenCandidate): Promise<A
   if (liq.usd == null || liq.usd < minLiquidity) score -= 10;
   score = Math.max(0, Math.min(100, score));
 
-  const hardGate = mintAuthorityDisabled && freezeAuthorityDisabled && lpVerified && holders.top10Pct <= 35 && risks.bundleRisk < 45 && (liq.usd ?? 0) >= minLiquidity;
+  const hardGate = mintAuthorityDisabled && freezeAuthorityDisabled && lpVerified && holders.top10Pct <= 35 && (deepScan ? risks.bundleRisk < 45 : true) && (liq.usd ?? 0) >= minLiquidity;
   const recommendation = hardGate && score >= 85;
   const reason = recommendation
-    ? 'Passed the hard safety gate: authorities revoked, holder concentration controlled, launch-cluster risk low and liquidity evidence verified.'
-    : `Rejected from recommendations: ${!mintAuthorityDisabled ? 'mint authority active; ' : ''}${!freezeAuthorityDisabled ? 'freeze authority active; ' : ''}${!lpVerified ? 'LP burn/lock not independently verified; ' : ''}${holders.top10Pct > 35 ? 'holder concentration too high; ' : ''}${risks.bundleRisk >= 45 ? 'launch clustering too high; ' : ''}${(liq.usd ?? 0) < minLiquidity ? 'liquidity below threshold.' : ''}`;
+    ? deepScan ? 'Passed the hard safety gate: authorities revoked, holder concentration controlled, launch-cluster risk low and liquidity evidence verified.' : 'Passed the lightweight safety gate: authorities revoked, holder concentration controlled and liquidity evidence verified.'
+    : `Rejected from recommendations: ${!mintAuthorityDisabled ? 'mint authority active; ' : ''}${!freezeAuthorityDisabled ? 'freeze authority active; ' : ''}${!lpVerified ? 'LP burn/lock not independently verified; ' : ''}${holders.top10Pct > 35 ? 'holder concentration too high; ' : ''}${deepScan && risks.bundleRisk >= 45 ? 'launch clustering too high; ' : ''}${(liq.usd ?? 0) < minLiquidity ? 'liquidity below threshold.' : ''}`;
 
   return { mint: candidate.mint, name: candidate.name, symbol: candidate.symbol, score, source: candidate.source, detectedAt: Date.now(), mintAuthorityDisabled, freezeAuthorityDisabled, top10Pct: holders.top10Pct, lpVerified, bundleRisk: risks.bundleRisk, devRisk: risks.devRisk, liquidityUsd: liq.usd, reason, recommendation };
 }

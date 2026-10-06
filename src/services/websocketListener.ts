@@ -1,15 +1,9 @@
 import type { TokenCandidate } from '../lib/types';
 
-/**
- * Real-time ingestion adapter.
- *
- * Cloudflare Pages Functions should not keep a long-lived outbound Solana
- * WebSocket open. The production path is Helius webhook -> this adapter ->
- * audit -> D1/KV -> SSE to browsers.
- */
 export type HeliusEvent = {
   signature?: string;
   type?: string;
+  source?: string;
   description?: string;
   timestamp?: number;
   tokenTransfers?: Array<{ mint?: string; tokenAmount?: number | string }>;
@@ -19,6 +13,11 @@ export type HeliusEvent = {
     programName?: string;
     instructionName?: string;
     accounts?: Array<{ pubkey?: string }>;
+    innerInstructions?: Array<{
+      programId?: string;
+      accounts?: string[];
+      data?: string;
+    }>;
   }>;
   [key: string]: unknown;
 };
@@ -34,23 +33,18 @@ function asArray<T>(value: unknown): T[] {
 }
 
 function eventText(e: HeliusEvent): string {
-  const instructions = asArray<{
-    programId?: string;
-    programName?: string;
-    instructionName?: string;
-  }>(e.instructions);
-
   const eventText = e.events && typeof e.events === 'object'
     ? JSON.stringify(e.events)
     : '';
 
+  const rawInstructionText = JSON.stringify(e.instructions ?? []);
+
   return [
+    e.source ?? '',
     e.type ?? '',
     e.description ?? '',
     eventText,
-    instructions
-      .map(i => (i.programId ?? '') + ' ' + (i.programName ?? '') + ' ' + (i.instructionName ?? ''))
-      .join(' '),
+    rawInstructionText,
   ].join(' ').toLowerCase();
 }
 
@@ -59,11 +53,37 @@ function looksLikeMint(value: unknown): value is string {
 }
 
 /**
- * Helius has used more than one shape for parsed migration events.
- * Keep tokenTransfers as the primary source, then fall back to fields whose
- * names explicitly identify a mint. This avoids treating arbitrary account
- * addresses as token mints.
+ * Helius can expose program IDs inside innerInstructions rather than the
+ * top-level instruction list. Recursively inspect the transaction text for
+ * known launch/liquidity programs, while only accepting addresses from fields
+ * explicitly identified as mints.
  */
+function containsKnownProgram(value: unknown, depth = 0): boolean {
+  if (depth > 10 || value == null) return false;
+
+  if (typeof value === 'string') {
+    const lower = value.toLowerCase();
+    return [
+      PUMP_FUN_PROGRAM,
+      PUMPSWAP_PROGRAM,
+      RAYDIUM_AMM,
+      RAYDIUM_CPMM,
+      RAYDIUM_LAUNCHLAB,
+    ].some(program => lower.includes(program.toLowerCase()));
+  }
+
+  if (Array.isArray(value)) {
+    return value.some(item => containsKnownProgram(item, depth + 1));
+  }
+
+  if (typeof value === 'object') {
+    return Object.values(value as Record<string, unknown>)
+      .some(child => containsKnownProgram(child, depth + 1));
+  }
+
+  return false;
+}
+
 function extractMints(value: unknown, found = new Set<string>(), depth = 0): Set<string> {
   if (depth > 8 || value == null) return found;
 
@@ -98,16 +118,24 @@ export function normalizeEvents(events: HeliusEvent[]): TokenCandidate[] {
 
   for (const e of events) {
     const text = eventText(e);
-    const programHit = [
-      PUMP_FUN_PROGRAM,
-      PUMPSWAP_PROGRAM,
-      RAYDIUM_AMM,
-      RAYDIUM_CPMM,
-      RAYDIUM_LAUNCHLAB,
-    ].some(p => text.includes(p.toLowerCase()));
+    const source = e.source?.toLowerCase() === 'pump_fun'
+      ? 'pump.fun'
+      : text.includes(PUMP_FUN_PROGRAM.toLowerCase()) || text.includes('pump.fun')
+        ? 'pump.fun'
+        : text.includes(PUMPSWAP_PROGRAM.toLowerCase()) || text.includes('pumpswap')
+          ? 'pumpswap'
+          : text.includes(RAYDIUM_AMM.toLowerCase()) ||
+              text.includes(RAYDIUM_CPMM.toLowerCase()) ||
+              text.includes('raydium')
+            ? 'raydium'
+            : 'on-chain';
 
+    const programHit = containsKnownProgram(e);
     const migrationLike = /migrat|create[_ ]?pool|launchlab|raydium|pumpswap|pump\.fun/.test(text);
-    if (!programHit && !migrationLike && e.type !== 'TOKEN_MINT') continue;
+
+    if (!programHit && !migrationLike && e.type !== 'TOKEN_MINT' && source === 'on-chain') {
+      continue;
+    }
 
     const primaryMints = asArray<{ mint?: string }>(e.tokenTransfers)
       .map(transfer => transfer.mint)
@@ -117,17 +145,6 @@ export function normalizeEvents(events: HeliusEvent[]): TokenCandidate[] {
     if (mints.size === 0) {
       extractMints(e, mints);
     }
-
-    const source =
-      text.includes(PUMP_FUN_PROGRAM.toLowerCase()) || text.includes('pump.fun')
-        ? 'pump.fun'
-        : text.includes(PUMPSWAP_PROGRAM.toLowerCase()) || text.includes('pumpswap')
-          ? 'pumpswap'
-          : text.includes(RAYDIUM_AMM.toLowerCase()) ||
-              text.includes(RAYDIUM_CPMM.toLowerCase()) ||
-              text.includes('raydium')
-            ? 'raydium'
-            : 'on-chain';
 
     for (const mint of mints) {
       out.set(mint, {

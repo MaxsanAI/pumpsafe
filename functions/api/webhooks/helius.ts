@@ -1,7 +1,8 @@
 import { normalizeEvents } from '../../../src/services/websocketListener';
 import { processCandidate } from '../../../src/services/processEvent';
+import type { Env } from '../../../src/lib/types';
 
-export const onRequestPost: PagesFunction = async ({ request, env, waitUntil }) => {
+export const onRequestPost: PagesFunction<Env> = async ({ request, env, waitUntil }) => {
   const auth = request.headers.get('authorization');
   if (!env.HELIUS_WEBHOOK_SECRET || auth !== env.HELIUS_WEBHOOK_SECRET) return new Response('Unauthorized', { status: 401 });
   const body = await request.json().catch(() => null) as unknown;

@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles.css';
 
+type TokensResponse = { tokens?: Token[] };
+
 type Token = {
   mint: string; name: string; symbol: string; score: number; source: string; detectedAt: number;
   mintAuthorityDisabled: boolean; freezeAuthorityDisabled: boolean; top10Pct: number;
@@ -24,7 +26,7 @@ function App() {
   const add = (token: Token) => setTokens((old) => [token, ...old.filter((x) => x.mint !== token.mint)].slice(0, 40));
 
   useEffect(() => {
-    fetch('/api/tokens?limit=30').then(r => r.ok ? r.json() : { tokens: [] }).then(d => setTokens(d.tokens ?? [])).catch(() => undefined);
+    fetch('/api/tokens?limit=30').then(r => r.ok ? r.json() as Promise<TokensResponse> : { tokens: [] }).then(d => setTokens(Array.isArray(d.tokens) ? d.tokens : [])).catch(() => undefined);
     const es = new EventSource('/api/events');
     es.onopen = () => setLive(true);
     es.onmessage = (e) => { try { const token = JSON.parse(e.data) as Token; add(token); if (!muted && 'Notification' in window && Notification.permission === 'granted') new Notification(`SafePump ${token.score}`, { body: `${token.symbol} passed the safety gate.` }); } catch {} };

@@ -1,0 +1,1 @@
+export const onRequestGet: PagesFunction = async ({ env }) => Response.json({ ok: true, service: 'SafePump', time: new Date().toISOString(), configured: { db: Boolean(env.DB), cache: Boolean(env.CACHE), rpc: Boolean(env.SOLANA_RPC_URL), helius: Boolean(env.HELIUS_API_KEY) } });

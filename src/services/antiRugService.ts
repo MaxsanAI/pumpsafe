@@ -58,13 +58,15 @@ async function launchClusterRisk(env: Env, candidate: TokenCandidate, owners: st
 
     const signatures = await rpc<Array<{ signature: string; slot: number }>>(env.SOLANA_RPC_URL, 'getSignaturesForAddress', [candidate.mint, { limit: 100, commitment: 'finalized' }]);
     const early = signatures.filter(x => x.slot >= launchSlot && x.slot <= launchSlot + 2);
-    const payerSet = new Set<string>();
-    for (const item of early.slice(0, 12)) {
+    const txs = await Promise.all(early.slice(0, 12).map(async item => {
       try {
-        const tx = await rpc<any>(env.SOLANA_RPC_URL, 'getTransaction', [item.signature, { encoding: 'jsonParsed', commitment: 'finalized', maxSupportedTransactionVersion: 0 }]);
-        const payer = tx?.transaction?.message?.accountKeys?.[0]?.pubkey ?? tx?.transaction?.message?.accountKeys?.[0];
-        if (payer) payerSet.add(payer);
-      } catch { /* one malformed historical tx must not fail the whole audit */ }
+        return await rpc<any>(env.SOLANA_RPC_URL, 'getTransaction', [item.signature, { encoding: 'jsonParsed', commitment: 'finalized', maxSupportedTransactionVersion: 0 }]);
+      } catch { return null; }
+    }));
+    const payerSet = new Set<string>();
+    for (const tx of txs) {
+      const payer = tx?.transaction?.message?.accountKeys?.[0]?.pubkey ?? tx?.transaction?.message?.accountKeys?.[0];
+      if (payer) payerSet.add(payer);
     }
     const clusterSize = payerSet.size;
     const bundleRisk = clusterSize >= 8 ? 90 : clusterSize >= 6 ? 65 : clusterSize >= 4 ? 40 : clusterSize >= 2 ? 18 : 5;

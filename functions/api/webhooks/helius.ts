@@ -2,7 +2,7 @@ import { normalizeEvents } from '../../../src/services/websocketListener';
 import { processCandidate } from '../../../src/services/processEvent';
 import type { Env } from '../../../src/lib/types';
 
-const MAX_CONCURRENCY = 3;
+const MAX_CONCURRENCY = 2;
 
 async function processWithLimit(env: Env, candidates: Awaited<ReturnType<typeof normalizeEvents>>) {
   let next = 0;
@@ -10,7 +10,11 @@ async function processWithLimit(env: Env, candidates: Awaited<ReturnType<typeof 
   async function worker() {
     while (next < candidates.length) {
       const index = next++;
-      await processCandidate(env, candidates[index]);
+      try {
+        await processCandidate(env, candidates[index]);
+      } catch (error) {
+        console.error('helius candidate worker failed', error);
+      }
     }
   }
 
@@ -23,8 +27,11 @@ async function processWithLimit(env: Env, candidates: Awaited<ReturnType<typeof 
 }
 
 export const onRequestPost: PagesFunction<Env> = async ({ request, env, waitUntil }) => {
-  const auth = request.headers.get('authorization');
-  if (!env.HELIUS_WEBHOOK_SECRET || auth !== env.HELIUS_WEBHOOK_SECRET) {
+  const auth = request.headers.get('authorization')?.trim();
+  const expected = env.HELIUS_WEBHOOK_SECRET?.trim();
+
+  // Helius sends the authHeader value directly as Authorization.
+  if (!expected || auth !== expected) {
     return new Response('Unauthorized', { status: 401 });
   }
 
@@ -33,12 +40,19 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env, waitUnti
     return Response.json({ error: 'expected event array' }, { status: 400 });
   }
 
-  const candidates = normalizeEvents(body);
+  let candidates: Awaited<ReturnType<typeof normalizeEvents>> = [];
+  try {
+    candidates = normalizeEvents(body);
+  } catch (error) {
+    // Do not turn a malformed/unexpected Helius payload into a 5xx loop.
+    console.error('helius event normalization failed', error);
+  }
 
-  // Never fan out a whole Helius batch into dozens of simultaneous RPC,
-  // DexScreener and RugCheck calls. Keep the webhook responsive while the
-  // background audit workers process a small number at a time.
-  waitUntil(processWithLimit(env, candidates));
+  // Acknowledge valid Helius deliveries immediately. Auditing is deliberately
+  // kept in waitUntil so Helius does not wait for RPC/Dex/RugCheck work.
+  if (candidates.length > 0) {
+    waitUntil(processWithLimit(env, candidates));
+  }
 
   return Response.json({
     received: body.length,

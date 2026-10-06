@@ -60,13 +60,26 @@ async function launchClusterRisk(env: Env, candidate: TokenCandidate, owners: st
   try {
     const signatures = await rpc<Array<{ signature: string; slot: number }>>(env.SOLANA_RPC_URL, 'getSignaturesForAddress', [candidate.mint, { limit: 1000, commitment: 'finalized' }]);
     if (signatures.length === 0) return { bundleRisk: 50, devRisk: 50 };
+
     const launchSlot = Math.min(...signatures.map(x => x.slot));
-    const earliest = signatures.filter(x => x.slot <= launchSlot + 2).slice(-12);
-    const txs = await Promise.all(earliest.map(async item => {
-      try {
-        return await rpc<any>(env.SOLANA_RPC_URL, 'getTransaction', [item.signature, { encoding: 'jsonParsed', commitment: 'finalized', maxSupportedTransactionVersion: 0 }]);
-      } catch { return null; }
-    }));
+    const earliest = signatures.filter(x => x.slot <= launchSlot + 2).slice(-6);
+    const txs: any[] = [];
+
+    for (let i = 0; i < earliest.length; i += 2) {
+      const batch = earliest.slice(i, i + 2);
+      const results = await Promise.all(batch.map(async item => {
+        try {
+          return await rpc<any>(env.SOLANA_RPC_URL, 'getTransaction', [
+            item.signature,
+            { encoding: 'jsonParsed', commitment: 'finalized', maxSupportedTransactionVersion: 0 },
+          ]);
+        } catch {
+          return null;
+        }
+      }));
+      txs.push(...results);
+    }
+
     const payerSet = new Set<string>();
     let feePayer: string | undefined;
     for (const tx of txs) {

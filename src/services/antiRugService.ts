@@ -39,9 +39,9 @@ async function verifyLp(env: Env, mint: string, liquidityUsd: number | null): Pr
 }
 
 async function holderConcentration(env: Env, mint: string): Promise<{ top10Pct: number; owners: string[] }> {
-  const largest = await rpc<Largest[]>(env.SOLANA_RPC_URL, 'getTokenLargestAccounts', [mint, { commitment: 'finalized' }]);
+  const largest = await rpc<LargestResponse>(env.SOLANA_RPC_URL, 'getTokenLargestAccounts', [mint, { commitment: 'finalized' }]);
   const supply = await rpc<{ value: { amount: string } }>(env.SOLANA_RPC_URL, 'getTokenSupply', [mint, { commitment: 'finalized' }]);
-  const top = largest.slice(0, 20);
+  const top = (largest.value ?? []).slice(0, 20);
   const accounts = await rpc<Multiple>(env.SOLANA_RPC_URL, 'getMultipleAccounts', [top.map(x => x.address), { encoding: 'jsonParsed', commitment: 'finalized' }]);
   const ownerBalances = new Map<string, bigint>();
   for (let i = 0; i < top.length; i++) {

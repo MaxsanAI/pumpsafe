@@ -9,3 +9,12 @@ export async function recentAudits(env: Env, limit = 30): Promise<AuditResult[]>
   const { results } = await env.DB.prepare(`SELECT mint,name,symbol,score,source,detected_at as detectedAt,mint_authority_disabled as mintAuthorityDisabled,freeze_authority_disabled as freezeAuthorityDisabled,top10_pct as top10Pct,lp_verified as lpVerified,bundle_risk as bundleRisk,dev_risk as devRisk,liquidity_usd as liquidityUsd,reason,recommendation FROM tokens WHERE recommendation=1 ORDER BY detected_at DESC LIMIT ?`).bind(Math.min(Math.max(limit,1),100)).all<AuditResult>();
   return results.map(r => ({ ...r, mintAuthorityDisabled: Boolean(r.mintAuthorityDisabled), freezeAuthorityDisabled: Boolean(r.freezeAuthorityDisabled), lpVerified: Boolean(r.lpVerified), recommendation: Boolean(r.recommendation) }));
 }
+
+export async function scanStats(env: Env) {
+  const row = await env.DB.prepare(`SELECT COUNT(*) as scanned, SUM(CASE WHEN recommendation=1 THEN 1 ELSE 0 END) as safe, SUM(CASE WHEN recommendation=0 THEN 1 ELSE 0 END) as blocked FROM tokens`).first<{ scanned:number; safe:number; blocked:number }>();
+  return {
+    scanned: Number(row?.scanned ?? 0),
+    safe: Number(row?.safe ?? 0),
+    blocked: Number(row?.blocked ?? 0),
+  };
+}

@@ -227,11 +227,23 @@ function App() {
           <section className="scanResult">
             <div className="scanResultMain">
               <span className="resultLabel">SCAN RESULT</span>
-              <strong>
-                {scanResult.name || 'Unknown token'} <small>{'
+              <strong>{scanResult.name || 'Unknown token'} <small>{'$' + (scanResult.symbol || 'TOKEN')}</small></strong>
+              <code>{scanResult.mint}</code>
+              <p className="resultReason">{scanResult.reason || 'No rejection reason was returned.'}</p>
+              <div className="resultChecks">
+                <span className={scanResult.mintAuthorityDisabled ? 'ok' : 'bad'}>Mint authority: {scanResult.mintAuthorityDisabled ? 'REVOKED' : 'ACTIVE'}</span>
+                <span className={scanResult.freezeAuthorityDisabled ? 'ok' : 'bad'}>Freeze authority: {scanResult.freezeAuthorityDisabled ? 'REVOKED' : 'ACTIVE'}</span>
+                <span className={scanResult.lpVerified ? 'ok' : 'bad'}>LP evidence: {scanResult.lpVerified ? 'VERIFIED' : 'NOT VERIFIED'}</span>
+                <span className={scanResult.top10Pct <= 35 ? 'ok' : 'bad'}>Top 10: {scanResult.top10Pct.toFixed(1)}%</span>
+                <span className={(scanResult.liquidityUsd ?? 0) >= 10000 ? 'ok' : 'bad'}>Liquidity: {scanResult.liquidityUsd == null ? 'UNKNOWN' : '$' + Math.round(scanResult.liquidityUsd).toLocaleString()}</span>
+              </div>
+            </div>
+            <div className={scanResult.recommendation ? 'resultPass' : 'resultBlock'}>
+              <span>{scanResult.recommendation ? '✓ PASSED' : '× BLOCKED'}</span>
+              <b>{scanResult.score}<small>/100</small></b>
+            </div>
           </section>
         )}
-
         <section className="toolbar">
           <div>
             <b>Fresh Safe Launches</b>

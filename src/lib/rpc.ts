@@ -1,8 +1,67 @@
+const RETRIES = 3;
+const REQUEST_TIMEOUT_MS = 12000;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 export async function rpc<T>(url: string, method: string, params: unknown[]): Promise<T> {
-  const response = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: crypto.randomUUID(), method, params }) });
-  if (!response.ok) throw new Error(`RPC HTTP ${response.status}`);
-  const body = await response.json() as { result?: T; error?: { message?: string } };
-  if (body.error) throw new Error(body.error.message ?? 'RPC error');
-  if (body.result === undefined) throw new Error('RPC returned no result');
-  return body.result;
+  let lastError: unknown = null;
+
+  for (let attempt = 0; attempt <= RETRIES; attempt++) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: crypto.randomUUID(),
+          method,
+          params,
+        }),
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        const retryable = response.status === 429 || response.status >= 500;
+        throw Object.assign(new Error(`RPC HTTP ${response.status}`), { retryable });
+      }
+
+      const body = await response.json() as {
+        result?: T;
+        error?: { message?: string; code?: number };
+      };
+
+      if (body.error) {
+        const message = body.error.message ?? 'RPC error';
+        const retryable = body.error.code === -32005 || /rate.?limit|too many requests|temporar|timeout/i.test(message);
+        throw Object.assign(new Error(message), { retryable });
+      }
+
+      if (body.result === undefined) throw new Error('RPC returned no result');
+      return body.result;
+    } catch (error) {
+      lastError = error;
+      const retryable = Boolean((error as { retryable?: boolean })?.retryable) ||
+        (error instanceof Error && error.name === 'AbortError');
+
+      if (!retryable || attempt === RETRIES) break;
+
+      const retryAfter = Number.isFinite(Number((error as { retryAfter?: unknown })?.retryAfter))
+        ? Number((error as { retryAfter?: unknown }).retryAfter)
+        : 0;
+      const delay = retryAfter > 0
+        ? Math.min(retryAfter * 1000, 4000)
+        : Math.min(4000, 500 * 2 ** attempt) + Math.floor(Math.random() * 250);
+
+      await sleep(delay);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error('RPC request failed');
 }

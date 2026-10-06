@@ -225,16 +225,230 @@ function App() {
 
         {scanResult && (
           <section className="scanResult">
-            <div>
+            <div className="scanResultMain">
               <span className="resultLabel">SCAN RESULT</span>
               <strong>
-                {scanResult.name || 'Unknown token'} <small>{'$' + (scanResult.symbol || 'TOKEN')}</small>
+                {scanResult.name || 'Unknown token'} <small>{'
+          </section>
+        )}
+
+        <section className="toolbar">
+          <div>
+            <b>Fresh Safe Launches</b>
+            <span> · live recommendations only</span>
+          </div>
+          <button onClick={toggleAlerts}>
+            {muted ? 'Enable alerts' : 'Alerts on'}
+          </button>
+        </section>
+
+        {verified.length === 0 && (
+          <div className="empty">
+            <div>◎</div>
+            <h2>Waiting for verified launches</h2>
+            <p>
+              SafePump is connected. A token appears here only after the server-side
+              safety gate passes.
+            </p>
+          </div>
+        )}
+
+        <div className="grid">
+          {verified.map((token) => (
+            <TokenCard key={token.mint} token={token} />
+          ))}
+        </div>
+      </main>
+
+      <footer>
+        SafePump is a risk-scoring system, not a guarantee. Always verify the token
+        and pool yourself before trading.
+      </footer>
+    </div>
+  );
+}
+
+function TokenCard({ token }: { token: Token }) {
+  const l = links(token.mint);
+
+  return (
+    <article className="card">
+      <div className="cardTop">
+        <div>
+          <div className="symbol">{'$' + (token.symbol || 'TOKEN')}</div>
+          <h2>{token.name || 'Unknown token'}</h2>
+          <code>{short(token.mint)}</code>
+        </div>
+
+        <div className="score">
+          <b>{token.score}</b>
+          <span>/100</span>
+          <small>SAFE</small>
+        </div>
+      </div>
+
+      <p className="reason">{token.reason}</p>
+
+      <div className="checks">
+        <span className={token.mintAuthorityDisabled ? 'ok' : 'bad'}>Mint authority</span>
+        <span className={token.freezeAuthorityDisabled ? 'ok' : 'bad'}>Freeze authority</span>
+        <span className={token.lpVerified ? 'ok' : 'bad'}>LP evidence</span>
+        <span className={token.bundleRisk < 20 ? 'ok' : 'warn'}>Launch cluster</span>
+      </div>
+
+      <div className="metrics">
+        <div>
+          <span>Top 10</span>
+          <b>{token.top10Pct.toFixed(1)}%</b>
+        </div>
+        <div>
+          <span>Liquidity</span>
+          <b>
+            {token.liquidityUsd == null
+              ? '—'
+              : '$' + Math.round(token.liquidityUsd).toLocaleString()}
+          </b>
+        </div>
+        <div>
+          <span>Source</span>
+          <b>{token.source}</b>
+        </div>
+      </div>
+
+      <div className="actions">
+        <a href={l.dex} target="_blank" rel="noreferrer">DEXScreener</a>
+        <a href={l.gmgn} target="_blank" rel="noreferrer">GMGN</a>
+        <a href={l.bullx} target="_blank" rel="noreferrer">BullX</a>
+        <a href={l.trojan} target="_blank" rel="noreferrer">Trojan</a>
+        <a href={l.pump} target="_blank" rel="noreferrer">Pump.fun</a>
+      </div>
+    </article>
+  );
+}
+
+createRoot(document.getElementById('root')!).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>,
+);
+ + (scanResult.symbol || 'TOKEN')}</small>
               </strong>
-              <code>{short(scanResult.mint)}</code>
+              <code>{scanResult.mint}</code>
+              <p className="resultReason">{scanResult.reason || 'No rejection reason was returned.'}</p>
+              <div className="resultChecks">
+                <span className={scanResult.mintAuthorityDisabled ? 'ok' : 'bad'}>Mint authority: {scanResult.mintAuthorityDisabled ? 'REVOKED' : 'ACTIVE'}</span>
+                <span className={scanResult.freezeAuthorityDisabled ? 'ok' : 'bad'}>Freeze authority: {scanResult.freezeAuthorityDisabled ? 'REVOKED' : 'ACTIVE'}</span>
+                <span className={scanResult.lpVerified ? 'ok' : 'bad'}>LP evidence: {scanResult.lpVerified ? 'VERIFIED' : 'NOT VERIFIED'}</span>
+                <span className={scanResult.top10Pct <= 35 ? 'ok' : 'bad'}>Top 10: {scanResult.top10Pct.toFixed(1)}%</span>
+                <span className={(scanResult.liquidityUsd ?? 0) >= 10000 ? 'ok' : 'bad'}>Liquidity: {scanResult.liquidityUsd == null ? 'UNKNOWN' : '
+          </section>
+        )}
+
+        <section className="toolbar">
+          <div>
+            <b>Fresh Safe Launches</b>
+            <span> · live recommendations only</span>
+          </div>
+          <button onClick={toggleAlerts}>
+            {muted ? 'Enable alerts' : 'Alerts on'}
+          </button>
+        </section>
+
+        {verified.length === 0 && (
+          <div className="empty">
+            <div>◎</div>
+            <h2>Waiting for verified launches</h2>
+            <p>
+              SafePump is connected. A token appears here only after the server-side
+              safety gate passes.
+            </p>
+          </div>
+        )}
+
+        <div className="grid">
+          {verified.map((token) => (
+            <TokenCard key={token.mint} token={token} />
+          ))}
+        </div>
+      </main>
+
+      <footer>
+        SafePump is a risk-scoring system, not a guarantee. Always verify the token
+        and pool yourself before trading.
+      </footer>
+    </div>
+  );
+}
+
+function TokenCard({ token }: { token: Token }) {
+  const l = links(token.mint);
+
+  return (
+    <article className="card">
+      <div className="cardTop">
+        <div>
+          <div className="symbol">{'$' + (token.symbol || 'TOKEN')}</div>
+          <h2>{token.name || 'Unknown token'}</h2>
+          <code>{short(token.mint)}</code>
+        </div>
+
+        <div className="score">
+          <b>{token.score}</b>
+          <span>/100</span>
+          <small>SAFE</small>
+        </div>
+      </div>
+
+      <p className="reason">{token.reason}</p>
+
+      <div className="checks">
+        <span className={token.mintAuthorityDisabled ? 'ok' : 'bad'}>Mint authority</span>
+        <span className={token.freezeAuthorityDisabled ? 'ok' : 'bad'}>Freeze authority</span>
+        <span className={token.lpVerified ? 'ok' : 'bad'}>LP evidence</span>
+        <span className={token.bundleRisk < 20 ? 'ok' : 'warn'}>Launch cluster</span>
+      </div>
+
+      <div className="metrics">
+        <div>
+          <span>Top 10</span>
+          <b>{token.top10Pct.toFixed(1)}%</b>
+        </div>
+        <div>
+          <span>Liquidity</span>
+          <b>
+            {token.liquidityUsd == null
+              ? '—'
+              : '$' + Math.round(token.liquidityUsd).toLocaleString()}
+          </b>
+        </div>
+        <div>
+          <span>Source</span>
+          <b>{token.source}</b>
+        </div>
+      </div>
+
+      <div className="actions">
+        <a href={l.dex} target="_blank" rel="noreferrer">DEXScreener</a>
+        <a href={l.gmgn} target="_blank" rel="noreferrer">GMGN</a>
+        <a href={l.bullx} target="_blank" rel="noreferrer">BullX</a>
+        <a href={l.trojan} target="_blank" rel="noreferrer">Trojan</a>
+        <a href={l.pump} target="_blank" rel="noreferrer">Pump.fun</a>
+      </div>
+    </article>
+  );
+}
+
+createRoot(document.getElementById('root')!).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>,
+);
+ + Math.round(scanResult.liquidityUsd).toLocaleString()}</span>
+              </div>
             </div>
             <div className={scanResult.recommendation ? 'resultPass' : 'resultBlock'}>
-              {scanResult.recommendation ? '✓ PASSED SAFETY GATE' : '× BLOCKED'}
-              <b>{scanResult.score}/100</b>
+              <span>{scanResult.recommendation ? '✓ PASSED' : '× BLOCKED'}</span>
+              <b>{scanResult.score}<small>/100</small></b>
             </div>
           </section>
         )}

@@ -1,6 +1,7 @@
 import { recentAudits } from '../../src/lib/store';
+import type { Env } from '../../src/lib/types';
 
-export const onRequestGet: PagesFunction = async ({ env, request }) => {
+export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
   const encoder = new TextEncoder();
   let stopped = false;
   request.signal.addEventListener('abort', () => { stopped = true; });

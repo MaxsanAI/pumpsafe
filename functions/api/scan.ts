@@ -4,6 +4,11 @@ import type { Env } from '../../src/lib/types';
 
 const BASE58 = /^[1-9A-HJ-NP-Za-km-z]+$/;
 
+function errorMessage(error: unknown): string {
+  if (error instanceof Error && error.message) return error.message;
+  return 'Unknown scan error';
+}
+
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   try {
     const body = await request.json().catch(() => null) as { mint?: unknown } | null;
@@ -33,6 +38,9 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     return Response.json({ audit }, { headers: { 'cache-control': 'no-store' } });
   } catch (error) {
     console.error('manual scan failed', error);
-    return Response.json({ error: 'Token could not be scanned. Check the mint address and try again.' }, { status: 400 });
+    return Response.json(
+      { error: `Scan failed: ${errorMessage(error)}` },
+      { status: 500, headers: { 'cache-control': 'no-store' } },
+    );
   }
 };

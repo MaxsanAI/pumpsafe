@@ -20,6 +20,7 @@ export type HeliusEvent = {
     instructionName?: string;
     accounts?: Array<{ pubkey?: string }>;
   }>;
+  [key: string]: unknown;
 };
 
 const PUMP_FUN_PROGRAM = '6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P';
@@ -53,6 +54,45 @@ function eventText(e: HeliusEvent): string {
   ].join(' ').toLowerCase();
 }
 
+function looksLikeMint(value: unknown): value is string {
+  return typeof value === 'string' && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(value);
+}
+
+/**
+ * Helius has used more than one shape for parsed migration events.
+ * Keep tokenTransfers as the primary source, then fall back to fields whose
+ * names explicitly identify a mint. This avoids treating arbitrary account
+ * addresses as token mints.
+ */
+function extractMints(value: unknown, found = new Set<string>(), depth = 0): Set<string> {
+  if (depth > 8 || value == null) return found;
+
+  if (Array.isArray(value)) {
+    for (const item of value) extractMints(item, found, depth + 1);
+    return found;
+  }
+
+  if (typeof value !== 'object') return found;
+
+  for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+    const normalizedKey = key.toLowerCase();
+
+    if (
+      (normalizedKey === 'mint' ||
+        normalizedKey === 'tokenmint' ||
+        normalizedKey === 'mintaddress' ||
+        normalizedKey === 'token_mint') &&
+      looksLikeMint(child)
+    ) {
+      found.add(child);
+    }
+
+    extractMints(child, found, depth + 1);
+  }
+
+  return found;
+}
+
 export function normalizeEvents(events: HeliusEvent[]): TokenCandidate[] {
   const out = new Map<string, TokenCandidate>();
 
@@ -69,22 +109,29 @@ export function normalizeEvents(events: HeliusEvent[]): TokenCandidate[] {
     const migrationLike = /migrat|create[_ ]?pool|launchlab|raydium|pumpswap|pump\.fun/.test(text);
     if (!programHit && !migrationLike && e.type !== 'TOKEN_MINT') continue;
 
-    for (const transfer of asArray<{ mint?: string }>(e.tokenTransfers)) {
-      if (!transfer.mint || transfer.mint.length < 32) continue;
+    const primaryMints = asArray<{ mint?: string }>(e.tokenTransfers)
+      .map(transfer => transfer.mint)
+      .filter(looksLikeMint);
 
-      const source =
-        text.includes(PUMP_FUN_PROGRAM.toLowerCase()) || text.includes('pump.fun')
-          ? 'pump.fun'
-          : text.includes(PUMPSWAP_PROGRAM.toLowerCase()) || text.includes('pumpswap')
-            ? 'pumpswap'
-            : text.includes(RAYDIUM_AMM.toLowerCase()) ||
-                text.includes(RAYDIUM_CPMM.toLowerCase()) ||
-                text.includes('raydium')
-              ? 'raydium'
-              : 'on-chain';
+    const mints = new Set(primaryMints);
+    if (mints.size === 0) {
+      extractMints(e, mints);
+    }
 
-      out.set(transfer.mint, {
-        mint: transfer.mint,
+    const source =
+      text.includes(PUMP_FUN_PROGRAM.toLowerCase()) || text.includes('pump.fun')
+        ? 'pump.fun'
+        : text.includes(PUMPSWAP_PROGRAM.toLowerCase()) || text.includes('pumpswap')
+          ? 'pumpswap'
+          : text.includes(RAYDIUM_AMM.toLowerCase()) ||
+              text.includes(RAYDIUM_CPMM.toLowerCase()) ||
+              text.includes('raydium')
+            ? 'raydium'
+            : 'on-chain';
+
+    for (const mint of mints) {
+      out.set(mint, {
+        mint,
         name: 'Unknown',
         symbol: 'TOKEN',
         source,

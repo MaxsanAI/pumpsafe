@@ -141,7 +141,22 @@ function App() {
     <div className="shell">
       <header className="topbar">
         <div className="brand">
-          <div className="logo">✓</div>
+          <div className="logo" aria-label="SafePump safety gauge">
+            <svg viewBox="0 0 64 64" aria-hidden="true">
+              <defs>
+                <linearGradient id="safePumpGauge" x1="12" y1="54" x2="52" y2="10" gradientUnits="userSpaceOnUse">
+                  <stop stopColor="#22c55e" />
+                  <stop offset=".55" stopColor="#34d399" />
+                  <stop offset="1" stopColor="#67e8f9" />
+                </linearGradient>
+              </defs>
+              <path d="M10 46a22 22 0 0 1 44 0" fill="none" stroke="#244052" strokeWidth="6" strokeLinecap="round" />
+              <path d="M10 46a22 22 0 0 1 35-17" fill="none" stroke="url(#safePumpGauge)" strokeWidth="6" strokeLinecap="round" />
+              <path d="M32 46 49 20" fill="none" stroke="#eaf5f1" strokeWidth="5" strokeLinecap="round" />
+              <path d="m49 20-1 13-11-7z" fill="#eaf5f1" />
+              <circle cx="32" cy="46" r="5" fill="#07111f" stroke="#eaf5f1" strokeWidth="3" />
+            </svg>
+          </div>
           <div>
             <strong>SafePump</strong>
             <span>Solana anti-rug intelligence</span>

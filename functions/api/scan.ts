@@ -18,16 +18,6 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       return Response.json({ error: 'Enter a valid Solana token mint address.' }, { status: 400 });
     }
 
-    const ip = request.headers.get('CF-Connecting-IP') ?? 'unknown';
-    const rateKey = `manual-scan:${ip}`;
-    if (await env.CACHE.get(rateKey)) {
-      return Response.json({ error: 'Please wait a few seconds before scanning again.' }, { status: 429 });
-    }
-
-    // Cloudflare KV expiration_ttl must be at least 60 seconds.
-    // Keep the rate-limit window at 60s rather than using an invalid 8s TTL.
-    await env.CACHE.put(rateKey, '1', { expirationTtl: 60 });
-
     const audit = await auditToken(env, {
       mint,
       name: 'Token',

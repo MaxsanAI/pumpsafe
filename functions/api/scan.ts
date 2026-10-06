@@ -24,7 +24,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       symbol: 'TOKEN',
       source: 'manual',
       pumpFun: true,
-    });
+    }, true);
 
     await saveAudit(env, audit);
 

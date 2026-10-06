@@ -24,7 +24,7 @@ export type HeliusEvent = {
 
 const PUMP_FUN_PROGRAM = '6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P';
 const PUMPSWAP_PROGRAM = 'pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA';
-const RAYDIUM_AMM = '675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8';
+const RAYDIUM_AMM = '675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp1';
 const RAYDIUM_CPMM = 'CPMMoo8L3F4NbVNunggL7H1ZpdTHKxQB5qKP1C';
 const RAYDIUM_LAUNCHLAB = 'LanMV9sAd7wArD4vJFi2qDdfnVhFxYSUg6eADduJ3uj';
 
@@ -36,31 +36,18 @@ function eventText(e: HeliusEvent): string {
   const eventText = e.events && typeof e.events === 'object'
     ? JSON.stringify(e.events)
     : '';
-
   const rawInstructionText = JSON.stringify(e.instructions ?? []);
-
-  return [
-    e.source ?? '',
-    e.type ?? '',
-    e.description ?? '',
-    eventText,
-    rawInstructionText,
-  ].join(' ').toLowerCase();
+  return [e.source ?? '', e.type ?? '', e.description ?? '', eventText, rawInstructionText]
+    .join(' ')
+    .toLowerCase();
 }
 
 function looksLikeMint(value: unknown): value is string {
   return typeof value === 'string' && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(value);
 }
 
-/**
- * Helius can expose program IDs inside innerInstructions rather than the
- * top-level instruction list. Recursively inspect the transaction text for
- * known launch/liquidity programs, while only accepting addresses from fields
- * explicitly identified as mints.
- */
 function containsKnownProgram(value: unknown, depth = 0): boolean {
   if (depth > 10 || value == null) return false;
-
   if (typeof value === 'string') {
     const lower = value.toLowerCase();
     return [
@@ -71,32 +58,24 @@ function containsKnownProgram(value: unknown, depth = 0): boolean {
       RAYDIUM_LAUNCHLAB,
     ].some(program => lower.includes(program.toLowerCase()));
   }
-
-  if (Array.isArray(value)) {
-    return value.some(item => containsKnownProgram(item, depth + 1));
-  }
-
+  if (Array.isArray(value)) return value.some(item => containsKnownProgram(item, depth + 1));
   if (typeof value === 'object') {
     return Object.values(value as Record<string, unknown>)
       .some(child => containsKnownProgram(child, depth + 1));
   }
-
   return false;
 }
 
 function extractMints(value: unknown, found = new Set<string>(), depth = 0): Set<string> {
   if (depth > 8 || value == null) return found;
-
   if (Array.isArray(value)) {
     for (const item of value) extractMints(item, found, depth + 1);
     return found;
   }
-
   if (typeof value !== 'object') return found;
 
   for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
     const normalizedKey = key.toLowerCase();
-
     if (
       (normalizedKey === 'mint' ||
         normalizedKey === 'tokenmint' ||
@@ -106,11 +85,22 @@ function extractMints(value: unknown, found = new Set<string>(), depth = 0): Set
     ) {
       found.add(child);
     }
-
     extractMints(child, found, depth + 1);
   }
-
   return found;
+}
+
+function isLaunchEvent(e: HeliusEvent, text: string): boolean {
+  const type = (e.type ?? '').toLowerCase();
+  if (type === 'token_mint' || type === 'create_mint' || type === 'initialize_mint') return true;
+
+  // Do not treat ordinary Pump.fun swaps as new launches. Helius can deliver
+  // SWAP payloads even when the webhook is configured around Pump.fun migration.
+  if (type === 'swap' || type === 'trade') {
+    return /migrat|graduate|graduat|create[_ ]?pool|launchlab/.test(text);
+  }
+
+  return /migrat|graduate|graduat|create[_ ]?pool|initialize[_ ]?mint|create[_ ]?mint|launchlab/.test(text);
 }
 
 export function normalizeEvents(events: HeliusEvent[]): TokenCandidate[] {
@@ -130,21 +120,14 @@ export function normalizeEvents(events: HeliusEvent[]): TokenCandidate[] {
             ? 'raydium'
             : 'on-chain';
 
-    const programHit = containsKnownProgram(e);
-    const migrationLike = /migrat|create[_ ]?pool|launchlab|raydium|pumpswap|pump\.fun/.test(text);
-
-    if (!programHit && !migrationLike && e.type !== 'TOKEN_MINT' && source === 'on-chain') {
-      continue;
-    }
+    if (!isLaunchEvent(e, text) || !containsKnownProgram(e)) continue;
 
     const primaryMints = asArray<{ mint?: string }>(e.tokenTransfers)
       .map(transfer => transfer.mint)
       .filter(looksLikeMint);
 
     const mints = new Set(primaryMints);
-    if (mints.size === 0) {
-      extractMints(e, mints);
-    }
+    if (mints.size === 0) extractMints(e, mints);
 
     for (const mint of mints) {
       out.set(mint, {

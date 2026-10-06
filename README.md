@@ -6,7 +6,7 @@ Stack: Cloudflare Pages + Pages Functions + D1 + KV + Helius webhooks + Solana J
 
 ## Safety gate
 
-SafePump only publishes a recommendation when all critical controls pass: revoked mint authority, revoked freeze authority, controlled top-holder concentration, acceptable early-launch clustering, sufficient liquidity and independently verified LP burn/lock evidence, with a final score of at least 85/100.
+SafePump only publishes a recommendation when all critical controls pass: revoked mint authority, revoked freeze authority, controlled top-holder concentration, acceptable early-launch clustering, sufficient liquidity and 100% LP burn/lock evidence, with a final score of at least 85/100.
 
 ## Real-time architecture
 
@@ -22,7 +22,7 @@ SafePump intentionally does not keep a permanent outbound Solana WebSocket insid
 
 ## Files
 
-- src/services/antiRugService.ts — authority, holder concentration, launch-cluster and liquidity/LP checks.
+- src/services/antiRugService.ts — authority, holder concentration, launch-cluster, liquidity and LP checks.
 - src/services/websocketListener.ts — real-time event normalization adapter.
 - src/services/processEvent.ts — enrichment, audit, persistence and Telegram dispatch.
 - functions/api/webhooks/helius.ts — authenticated Helius webhook endpoint.
@@ -32,9 +32,9 @@ SafePump intentionally does not keep a permanent outbound Solana WebSocket insid
 - schema.sql — D1 schema.
 - ARCHITECTURE.md — glossary, Cloudflare dashboard setup, webhook setup and production test plan.
 
-## Important LP note
+## LP verification
 
-There is no universal Solana field that proves “100% LP burned/locked” for every Raydium/PumpSwap pool type. SafePump therefore requires an explicit LP verifier through LP_LOCK_API_URL and will not recommend tokens when that evidence is missing. This is deliberate: the scanner is designed to avoid false-positive “safe” labels.
+SafePump uses RugCheck's token report summary as the default LP evidence source and requires reported LP locked/burned coverage of 100% before a token can pass the hard gate. You can override the provider with LP_LOCK_API_URL and optionally LP_LOCK_API_KEY.
 
 ## Source verification
 

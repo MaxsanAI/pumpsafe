@@ -21,7 +21,7 @@ export type HeliusEvent = {
 const PUMP_FUN_PROGRAM = '6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P';
 const PUMPSWAP_PROGRAM = 'pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA';
 const RAYDIUM_AMM = '675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8';
-const RAYDIUM_CPMM = 'CPMMoo8L3F4NbBCKVNunggL7H1ZpdTHKxQB5qKP1C';
+const RAYDIUM_CPMM = 'CPMMoo8L3F4NbVNunggL7H1ZpdTHKxQB5qKP1C';
 const RAYDIUM_LAUNCHLAB = 'LanMV9sAd7wArD4vJFi2qDdfnVhFxYSUg6eADduJ3uj';
 
 export function normalizeEvents(events: HeliusEvent[]): TokenCandidate[] {

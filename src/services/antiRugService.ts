@@ -7,6 +7,7 @@ type Multiple = { value: Array<{ data?: { parsed?: { info?: { owner?: string; to
 type DexPair = { liquidity?: { usd?: number }; baseToken?: { address?: string; name?: string; symbol?: string }; quoteToken?: { address?: string } };
 
 const pct = (part: bigint, total: bigint) => total > 0n ? Number((part * 10000n) / total) / 100 : 100;
+const DEFAULT_LP_PROVIDER = 'https://api.rugcheck.xyz/v1/tokens/{mint}/report/summary';
 
 async function dexLiquidity(mint: string): Promise<{ usd: number | null; pair: DexPair | null }> {
   try {
@@ -19,15 +20,21 @@ async function dexLiquidity(mint: string): Promise<{ usd: number | null; pair: D
 }
 
 async function verifyLp(env: Env, mint: string, liquidityUsd: number | null): Promise<boolean> {
-  if (!env.LP_LOCK_API_URL) return false;
   try {
-    const u = new URL(env.LP_LOCK_API_URL);
-    u.searchParams.set('mint', mint);
-    const r = await fetch(u, { headers: env.LP_LOCK_API_KEY ? { authorization: `Bearer ${env.LP_LOCK_API_KEY}` } : undefined });
+    const template = env.LP_LOCK_API_URL || DEFAULT_LP_PROVIDER;
+    const endpoint = template.includes('{mint}') ? template.replaceAll('{mint}', encodeURIComponent(mint)) : (() => {
+      const u = new URL(template);
+      u.searchParams.set('mint', mint);
+      return u.toString();
+    })();
+    const r = await fetch(endpoint, { headers: env.LP_LOCK_API_KEY ? { authorization: `Bearer ${env.LP_LOCK_API_KEY}` } : { accept: 'application/json' } });
     if (!r.ok) return false;
-    const data = await r.json() as { verified?: boolean; burnedPct?: number; lockedPct?: number; liquidityUsd?: number };
-    const reportedLiquidity = data.liquidityUsd ?? liquidityUsd ?? 0;
-    return data.verified === true && (data.burnedPct ?? 0) + (data.lockedPct ?? 0) >= 100 && reportedLiquidity > 0;
+    const data = await r.json() as any;
+    const lockedPct = Number(data?.lpLockedPct ?? data?.lockedPct ?? data?.markets?.[0]?.lp?.lpLockedPct ?? 0);
+    const burnedPct = Number(data?.burnedPct ?? 0);
+    const providerLiquidity = Number(data?.totalMarketLiquidity ?? data?.liquidityUsd ?? 0);
+    const reportedLiquidity = providerLiquidity > 0 ? providerLiquidity : (liquidityUsd ?? 0);
+    return reportedLiquidity > 0 && lockedPct + burnedPct >= 100;
   } catch { return false; }
 }
 

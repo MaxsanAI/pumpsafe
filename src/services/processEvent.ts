@@ -16,9 +16,9 @@ async function enrichCandidate(env: Env, candidate: TokenCandidate): Promise<Tok
 }
 
 export async function processCandidate(env: Env, candidate: TokenCandidate): Promise<void> {
-  const key = `seen:${candidate.mint}`;
+  const key = `seen:${candidate.mint}:${candidate.source}`;
   if (await env.CACHE.get(key)) return;
-  await env.CACHE.put(key, '1', { expirationTtl: 86400 });
+  await env.CACHE.put(key, '1', { expirationTtl: 3600 });
   try {
     const enriched = await enrichCandidate(env, candidate);
     const audit = await auditToken(env, enriched);

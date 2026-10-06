@@ -31,15 +31,14 @@ async function enrichCandidate(env: Env, candidate: TokenCandidate): Promise<Tok
 }
 
 export async function processCandidate(env: Env, candidate: TokenCandidate): Promise<void> {
-  const key = `seen:${candidate.mint}:${candidate.source}`;
-  const lockKey = `processing:${candidate.mint}`;
+  // D1 is the durable source of truth. KV must not be required for ingestion,
+  // because KV quotas can be exhausted independently of the scanner.
+  const existing = await env.DB
+    .prepare('SELECT mint FROM tokens WHERE mint = ? LIMIT 1')
+    .bind(candidate.mint)
+    .first<{ mint: string }>();
 
-  // KV is used as a lightweight burst guard. A successful audit is cached for
-  // one hour, while an in-flight audit gets a short lease so duplicate Helius
-  // deliveries do not fan out into parallel RPC/Dex/RugCheck work.
-  if (await env.CACHE.get(key)) return;
-  if (await env.CACHE.get(lockKey)) return;
-  await env.CACHE.put(lockKey, '1', { expirationTtl: 120 });
+  if (existing) return;
 
   try {
     const enriched = await enrichCandidate(env, candidate);
@@ -49,11 +48,7 @@ export async function processCandidate(env: Env, candidate: TokenCandidate): Pro
     if (audit.recommendation) {
       await postTelegram(env, audit);
     }
-
-    await env.CACHE.put(key, '1', { expirationTtl: 3600 });
-    await env.CACHE.delete(lockKey);
   } catch (error) {
-    await env.CACHE.delete(lockKey);
     console.error('audit failed', candidate.mint, candidate.source, error);
   }
 }

@@ -287,7 +287,7 @@ function TokenCard({ token }: { token: Token }) {
           <code>{short(token.mint)}</code>
         </div>
 
-        <div className="score">
+        <div className={token.recommendation ? 'score safe' : 'score rug'}>
           <b>{token.score}</b>
           <span>/100</span>
           <small>{token.recommendation ? 'SAFE' : 'RUG RISK'}</small>

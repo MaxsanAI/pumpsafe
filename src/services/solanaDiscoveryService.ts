@@ -11,8 +11,8 @@ const CREATE_DISCRIMINATORS = new Set([
 ]);
 
 const SIGNATURE_LIMIT = 1000;
-const MAX_TRANSACTIONS_PER_RUN = 200;
-const TRANSACTION_CONCURRENCY = 10;
+const MAX_TRANSACTIONS_PER_RUN = 500;
+const TRANSACTION_CONCURRENCY = 20;
 
 export interface DiscoveryDiagnostics {
   transactionsWithPumpProgram: number;
@@ -20,6 +20,7 @@ export interface DiscoveryDiagnostics {
   innerPumpInstructions: number;
   createDiscriminatorHits: number;
   createV2DiscriminatorHits: number;
+  candidateMints: string[];
   sampleDiscriminators: string[];
 }
 
@@ -324,6 +325,7 @@ export async function discoverPumpFunTokens(
     innerPumpInstructions: 0,
     createDiscriminatorHits: 0,
     createV2DiscriminatorHits: 0,
+    candidateMints: [],
     sampleDiscriminators: [],
   };
 
@@ -361,6 +363,9 @@ export async function discoverPumpFunTokens(
 
     if (candidate) {
       candidates.set(candidate.mint, candidate);
+      if (!diagnostics.candidateMints.includes(candidate.mint) && diagnostics.candidateMints.length < 24) {
+        diagnostics.candidateMints.push(candidate.mint);
+      }
     }
   }
 

@@ -13,6 +13,15 @@ const CREATE_DISCRIMINATORS = new Set([
 const DISCOVERY_LIMIT = 100;
 const MAX_TRANSACTIONS_PER_RUN = 30;
 
+interface DiscoveryDiagnostics {
+  transactionsWithPumpProgram: number;
+  outerPumpInstructions: number;
+  innerPumpInstructions: number;
+  createDiscriminatorHits: number;
+  createV2DiscriminatorHits: number;
+  sampleDiscriminators: string[];
+}
+
 interface SignatureInfo {
   signature: string;
   slot: number;
@@ -118,17 +127,32 @@ function isCreateInstruction(instruction: Instruction, keys: AccountKey[]): bool
 function candidateFromTransaction(
   signature: SignatureInfo,
   tx: TransactionResponse,
+  diagnostics: DiscoveryDiagnostics,
 ): TokenCandidate | null {
   if (tx.meta?.err) return null;
 
   const message = tx.transaction?.message;
   const keys = message?.accountKeys ?? [];
+  let foundPumpInstruction = false;
 
-  for (const instruction of message?.instructions ?? []) {
-    if (!isCreateInstruction(instruction, keys)) continue;
+  const inspect = (instruction: Instruction): TokenCandidate | null => {
+    if (instructionProgramId(instruction, keys) !== PUMP_FUN_PROGRAM) return null;
+
+    foundPumpInstruction = true;
+    const disc = discriminator(instruction.data);
+    if (disc) {
+      if (diagnostics.sampleDiscriminators.length < 12 && !diagnostics.sampleDiscriminators.includes(disc)) {
+        diagnostics.sampleDiscriminators.push(disc);
+      }
+      if (disc === '181ec828051c0777') diagnostics.createDiscriminatorHits++;
+      if (disc === 'd6904cec5f8b31b4') diagnostics.createV2DiscriminatorHits++;
+    }
+
+    const isCreate = CREATE_DISCRIMINATORS.has(disc ?? '');
+    if (!isCreate) return null;
 
     const mint = extractMint(instruction, keys);
-    if (!mint) continue;
+    if (!mint) return null;
 
     return {
       mint,
@@ -138,27 +162,27 @@ function candidateFromTransaction(
       signature: signature.signature,
       pumpFun: true,
     };
+  };
+
+  for (const instruction of message?.instructions ?? []) {
+    if (instructionProgramId(instruction, keys) === PUMP_FUN_PROGRAM) {
+      diagnostics.outerPumpInstructions++;
+    }
+    const candidate = inspect(instruction);
+    if (candidate) return candidate;
   }
 
-  // CPI instructions are exposed by Solana under meta.innerInstructions.
   for (const group of tx.meta?.innerInstructions ?? []) {
     for (const instruction of group.instructions ?? []) {
-      if (!isCreateInstruction(instruction, keys)) continue;
-
-      const mint = extractMint(instruction, keys);
-      if (!mint) continue;
-
-      return {
-        mint,
-        name: 'Unknown',
-        symbol: 'TOKEN',
-        source: 'pump.fun',
-        signature: signature.signature,
-        pumpFun: true,
-      };
+      if (instructionProgramId(instruction, keys) === PUMP_FUN_PROGRAM) {
+        diagnostics.innerPumpInstructions++;
+      }
+      const candidate = inspect(instruction);
+      if (candidate) return candidate;
     }
   }
 
+  if (foundPumpInstruction) diagnostics.transactionsWithPumpProgram++;
   return null;
 }
 
@@ -190,6 +214,7 @@ export interface DiscoveryResult {
   transactionsChecked: number;
   candidates: TokenCandidate[];
   cursor: string | null;
+  diagnostics: DiscoveryDiagnostics;
 }
 
 export async function discoverPumpFunTokens(env: Env): Promise<DiscoveryResult> {
@@ -213,6 +238,14 @@ export async function discoverPumpFunTokens(env: Env): Promise<DiscoveryResult> 
 
   const candidates = new Map<string, TokenCandidate>();
   let transactionsChecked = 0;
+  const diagnostics: DiscoveryDiagnostics = {
+    transactionsWithPumpProgram: 0,
+    outerPumpInstructions: 0,
+    innerPumpInstructions: 0,
+    createDiscriminatorHits: 0,
+    createV2DiscriminatorHits: 0,
+    sampleDiscriminators: [],
+  };
 
   for (const signature of batch) {
     const tx = await rpc<TransactionResponse | null>(
@@ -227,7 +260,7 @@ export async function discoverPumpFunTokens(env: Env): Promise<DiscoveryResult> 
     transactionsChecked++;
 
     if (tx) {
-      const candidate = candidateFromTransaction(signature, tx);
+      const candidate = candidateFromTransaction(signature, tx, diagnostics);
       if (candidate) candidates.set(candidate.mint, candidate);
     }
   }
@@ -241,5 +274,6 @@ export async function discoverPumpFunTokens(env: Env): Promise<DiscoveryResult> 
     transactionsChecked,
     candidates: [...candidates.values()],
     cursor: batch.length ? batch[batch.length - 1].signature : cursor,
+    diagnostics,
   };
 }

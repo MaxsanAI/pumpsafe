@@ -59,11 +59,11 @@ async function holderConcentration(env: Env, mint: string): Promise<{ top10Pct: 
 async function launchClusterRisk(env: Env, candidate: TokenCandidate, owners: string[]): Promise<{ bundleRisk: number; devRisk: number }> {
   if (!candidate.signature) return { bundleRisk: 50, devRisk: 50 };
   try {
-    const signatures = await rpc<Array<{ signature: string; slot: number }>>(env.SOLANA_RPC_URL, 'getSignaturesForAddress', [candidate.mint, { limit: 1000, commitment: 'finalized' }]);
+    const signatures = await rpc<Array<{ signature: string; slot: number }>>(env.SOLANA_RPC_URL, 'getSignaturesForAddress', [candidate.mint, { limit: 40, commitment: 'finalized' }]);
     if (signatures.length === 0) return { bundleRisk: 50, devRisk: 50 };
 
     const launchSlot = Math.min(...signatures.map(x => x.slot));
-    const earliest = signatures.filter(x => x.slot <= launchSlot + 2).slice(-6);
+    const earliest = signatures.filter(x => x.slot <= launchSlot + 2).slice(-4);
     const txs: any[] = [];
 
     for (let i = 0; i < earliest.length; i += 2) {

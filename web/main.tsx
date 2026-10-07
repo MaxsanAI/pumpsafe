@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles.css';
 
@@ -74,8 +74,8 @@ function App() {
         add(token);
 
         if (!muted && 'Notification' in window && Notification.permission === 'granted') {
-          new Notification('SafePump ' + token.score, {
-            body: token.symbol + ' passed the safety gate.',
+          new Notification('SafePump ' + (token.recommendation ? 'SAFE' : 'RUG RISK'), {
+            body: (token.symbol || 'TOKEN') + ' scored ' + token.score + '/100.',
           });
         }
       } catch {
@@ -125,11 +125,6 @@ function App() {
     }
   }
 
-  const verified = useMemo(
-    () => tokens.filter((token) => token.score >= 85 && token.lpVerified),
-    [tokens],
-  );
-
   const toggleAlerts = () => {
     setMuted((current) => !current);
     if ('Notification' in window && Notification.permission === 'default') {
@@ -173,14 +168,14 @@ function App() {
           <div>
             <p className="eyebrow">AUTOMATED ON-CHAIN SCREENING</p>
             <h1>
-              Find safer Solana launches
+              Scan Solana tokens
               <br />
-              <em>before the crowd.</em>
+              <em>spot the rug risk.</em>
             </h1>
             <p className="sub">
-              Every candidate is checked against authority, holder concentration,
-              launch-wallet behavior and liquidity evidence. Only tokens that clear
-              the hard safety gate are recommended.
+              Every scanned token gets a full on-chain risk analysis. SafePump keeps
+              both safe and risky results visible so you can see exactly why a token
+              was marked SAFE or RUG RISK.
             </p>
           </div>
 
@@ -204,7 +199,7 @@ function App() {
           <div>
             <p className="eyebrow">CHECK A TOKEN</p>
             <h2>Scan any Solana mint</h2>
-            <p>Paste a contract address and run the same safety gate used by the live feed.</p>
+            <p>Paste a contract address and get the complete SafePump risk analysis.</p>
           </div>
 
           <form onSubmit={manualScan}>
@@ -239,34 +234,34 @@ function App() {
               </div>
             </div>
             <div className={scanResult.recommendation ? 'resultPass' : 'resultBlock'}>
-              <span>{scanResult.recommendation ? '✓ PASSED' : '× BLOCKED'}</span>
+              <span>{scanResult.recommendation ? '✓ SAFE' : '⚠ RUG RISK'}</span>
               <b>{scanResult.score}<small>/100</small></b>
             </div>
           </section>
         )}
         <section className="toolbar">
           <div>
-            <b>Fresh Safe Launches</b>
-            <span> · live recommendations only</span>
+            <b>Scanned Token Analysis</b>
+            <span> · SAFE and RUG RISK
           </div>
           <button onClick={toggleAlerts}>
             {muted ? 'Enable alerts' : 'Alerts on'}
           </button>
         </section>
 
-        {verified.length === 0 && (
+        {tokens.length === 0 && (
           <div className="empty">
             <div>◎</div>
-            <h2>Waiting for verified launches</h2>
+            <h2>No token audits yet</h2>
             <p>
-              SafePump is connected. A token appears here only after the server-side
-              safety gate passes.
+              Scan a Solana mint above. SafePump will keep the complete result here,
+              whether the token is marked SAFE or RUG RISK.
             </p>
           </div>
         )}
 
         <div className="grid">
-          {verified.map((token) => (
+          {tokens.map((token) => (
             <TokenCard key={token.mint} token={token} />
           ))}
         </div>
@@ -295,7 +290,7 @@ function TokenCard({ token }: { token: Token }) {
         <div className="score">
           <b>{token.score}</b>
           <span>/100</span>
-          <small>SAFE</small>
+          <small>{token.recommendation ? 'SAFE' : 'RUG RISK'}</small>
         </div>
       </div>
 
@@ -305,7 +300,7 @@ function TokenCard({ token }: { token: Token }) {
         <span className={token.mintAuthorityDisabled ? 'ok' : 'bad'}>Mint authority</span>
         <span className={token.freezeAuthorityDisabled ? 'ok' : 'bad'}>Freeze authority</span>
         <span className={token.lpVerified ? 'ok' : 'bad'}>LP evidence</span>
-        <span className={token.bundleRisk < 20 ? 'ok' : 'warn'}>Launch cluster</span>
+        <span className={token.bundleRisk < 20 ? 'ok' : token.bundleRisk < 45 ? 'warn' : 'bad'}>Launch cluster</span>
       </div>
 
       <div className="metrics">
@@ -322,8 +317,12 @@ function TokenCard({ token }: { token: Token }) {
           </b>
         </div>
         <div>
-          <span>Source</span>
-          <b>{token.source}</b>
+          <span>Bundle risk</span>
+          <b>{token.bundleRisk}/100</b>
+        </div>
+        <div>
+          <span>Dev risk</span>
+          <b>{token.devRisk}/100</b>
         </div>
       </div>
 

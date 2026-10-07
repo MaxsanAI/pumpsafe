@@ -3,6 +3,7 @@ import type { AuditResult, Env, TokenCandidate } from '../lib/types';
 
 type ParsedAccount = { value: { data?: { parsed?: { info?: { mintAuthority?: string | null; freezeAuthority?: string | null; supply?: string; decimals?: number } } } } | null };
 type Largest = { address: string; amount: string; decimals: number };
+type LargestResponse = { value: Largest[] };
 type Multiple = { value: Array<{ data?: { parsed?: { info?: { owner?: string; tokenAmount?: { amount?: string } } } } } | null> };
 type DexPair = { liquidity?: { usd?: number }; baseToken?: { address?: string; name?: string; symbol?: string }; quoteToken?: { address?: string } };
 

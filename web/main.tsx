@@ -29,7 +29,7 @@ const links = (mint: string) => ({
   dex: 'https://dexscreener.com/solana/' + mint,
   gmgn: 'https://gmgn.ai/r/ZLO8FpJm',
   bullx: 'https://bullx.io/terminal?chain=solana&address=' + mint,
-  trojan: 'https://t.me/solana_trojanbot?start=r-ref-' + mint,
+  trojan: 'https://t.me/solana_trojanbot?start=r-aihubpro3',
   pump: 'https://pump.fun/' + mint,
 });
 

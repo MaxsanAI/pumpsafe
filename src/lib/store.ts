@@ -6,7 +6,7 @@ export async function saveAudit(env: Env, audit: AuditResult) {
 }
 
 export async function recentAudits(env: Env, limit = 30): Promise<AuditResult[]> {
-  const { results } = await env.DB.prepare(`SELECT mint,name,symbol,score,source,detected_at as detectedAt,mint_authority_disabled as mintAuthorityDisabled,freeze_authority_disabled as freezeAuthorityDisabled,top10_pct as top10Pct,lp_verified as lpVerified,bundle_risk as bundleRisk,dev_risk as devRisk,liquidity_usd as liquidityUsd,reason,recommendation FROM tokens WHERE recommendation=1 ORDER BY detected_at DESC LIMIT ?`).bind(Math.min(Math.max(limit,1),100)).all<AuditResult>();
+  const { results } = await env.DB.prepare(`SELECT mint,name,symbol,score,source,detected_at as detectedAt,mint_authority_disabled as mintAuthorityDisabled,freeze_authority_disabled as freezeAuthorityDisabled,top10_pct as top10Pct,lp_verified as lpVerified,bundle_risk as bundleRisk,dev_risk as devRisk,liquidity_usd as liquidityUsd,reason,recommendation FROM tokens ORDER BY detected_at DESC LIMIT ?`).bind(Math.min(Math.max(limit,1),100)).all<AuditResult>();
   return results.map(r => ({ ...r, mintAuthorityDisabled: Boolean(r.mintAuthorityDisabled), freezeAuthorityDisabled: Boolean(r.freezeAuthorityDisabled), lpVerified: Boolean(r.lpVerified), recommendation: Boolean(r.recommendation) }));
 }
 

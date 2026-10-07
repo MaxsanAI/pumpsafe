@@ -3,6 +3,7 @@ export interface Env {
   CACHE: KVNamespace;
   SOLANA_RPC_URL: string;
   SOLANA_RPC_FALLBACK_URL?: string;
+  DISCOVERY_SECRET?: string;
   TELEGRAM_BOT_TOKEN: string;
   TELEGRAM_CHAT_ID: string;
   TELEGRAM_WEBHOOK_SECRET?: string;

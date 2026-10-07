@@ -242,7 +242,7 @@ function App() {
         <section className="toolbar">
           <div>
             <b>Scanned Token Analysis</b>
-            <span> · SAFE and RUG RISK
+            <span> · SAFE and RUG RISK</span>
           </div>
           <button onClick={toggleAlerts}>
             {muted ? 'Enable alerts' : 'Alerts on'}

@@ -1,8 +1,49 @@
 import { auditToken } from './antiRugService';
 import { postTelegram } from '../lib/telegram';
 import { saveAudit } from '../lib/store';
+import { resolveTokenMetadata } from './tokenMetadataService';
 import type { Env, TokenCandidate } from '../lib/types';
-async function claimEvent(env:Env,signature?:string){if(!signature)return true;const r=await env.DB.prepare('INSERT OR IGNORE INTO processed_events (signature, processed_at) VALUES (?, ?)').bind(signature,Date.now()).run();return r.meta.changes===1}
-async function releaseEvent(env:Env,signature?:string){if(!signature)return;try{await env.DB.prepare('DELETE FROM processed_events WHERE signature = ?').bind(signature).run()}catch(e){console.error('failed to release processed event',signature,e)}}
-async function metadata(env:Env,mint:string){try{const r=await fetch('https://mainnet.helius-rpc.com/?api-key='+encodeURIComponent(env.HELIUS_API_KEY),{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',id:'pumpsafe-webhook-metadata',method:'getAsset',params:{id:mint}})});if(!r.ok)return{name:'Unknown token',symbol:'TOKEN'};const b=await r.json() as {result?:{content?:{metadata?:{name?:string;symbol?:string}};token_info?:{symbol?:string}}};return{name:b.result?.content?.metadata?.name?.trim()||'Unknown token',symbol:b.result?.content?.metadata?.symbol?.trim()||b.result?.token_info?.symbol?.trim()||'TOKEN'}}catch(e){console.error('token metadata lookup failed',mint,e);return{name:'Unknown token',symbol:'TOKEN'}}}
-export async function processCandidate(env:Env,candidate:TokenCandidate){const claimed=await claimEvent(env,candidate.signature);if(!claimed)return;try{const existing=await env.DB.prepare('SELECT mint FROM tokens WHERE mint = ? LIMIT 1').bind(candidate.mint).first<{mint:string}>();if(existing)return;const m=candidate.name!=='Unknown'&&candidate.name!=='Unknown token'?{name:candidate.name,symbol:candidate.symbol}:await metadata(env,candidate.mint);const audit=await auditToken(env,{...candidate,name:m.name,symbol:m.symbol},false);await saveAudit(env,audit);await postTelegram(env,audit)}catch(e){await releaseEvent(env,candidate.signature);throw e}}
+
+async function claimEvent(env: Env, signature?: string): Promise<boolean> {
+  if (!signature) return true;
+  const result = await env.DB.prepare('INSERT OR IGNORE INTO processed_events (signature, processed_at) VALUES (?, ?)').bind(signature, Date.now()).run();
+  return result.meta.changes === 1;
+}
+
+async function releaseEvent(env: Env, signature?: string): Promise<void> {
+  if (!signature) return;
+  try {
+    await env.DB.prepare('DELETE FROM processed_events WHERE signature = ?').bind(signature).run();
+  } catch (error) {
+    console.error('failed to release processed event', signature, error);
+  }
+}
+
+export async function processCandidate(env: Env, candidate: TokenCandidate, deepScan = false): Promise<{ processed: boolean; audit?: Awaited<ReturnType<typeof auditToken>> }> {
+  const claimed = await claimEvent(env, candidate.signature);
+  if (!claimed) return { processed: false };
+
+  try {
+    const existing = await env.DB.prepare('SELECT mint FROM tokens WHERE mint = ? LIMIT 1').bind(candidate.mint).first<{ mint: string }>();
+    if (existing) return { processed: false };
+
+    const metadata = await resolveTokenMetadata(env, candidate.mint);
+    const audit = await auditToken(env, { ...candidate, name: metadata.name, symbol: metadata.symbol }, deepScan);
+
+    audit.imageUrl = metadata.imageUrl;
+    audit.metadataSource = metadata.metadataSource;
+    audit.website = metadata.website;
+    audit.twitter = metadata.twitter;
+    audit.telegram = metadata.telegram;
+    audit.verified = metadata.verified;
+    audit.organicScore = metadata.organicScore;
+    audit.holderCount = metadata.holderCount;
+
+    await saveAudit(env, audit);
+    await postTelegram(env, audit);
+    return { processed: true, audit };
+  } catch (error) {
+    await releaseEvent(env, candidate.signature);
+    throw error;
+  }
+}

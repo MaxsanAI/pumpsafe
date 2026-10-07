@@ -9,31 +9,21 @@ function errorMessage(error: unknown): string {
   return 'Unknown scan error';
 }
 
-async function tokenMetadata(env: Env, mint: string): Promise<{ name: string; symbol: string }> {
+async function tokenMetadata(mint: string): Promise<{ name: string; symbol: string }> {
   try {
-    const response = await fetch(`https://mainnet.helius-rpc.com/?api-key=${encodeURIComponent(env.HELIUS_API_KEY)}`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        id: 'safepump-manual-metadata',
-        method: 'getAsset',
-        params: { id: mint },
-      }),
-    });
-
+    const response = await fetch(
+      `https://api.dexscreener.com/latest/dex/tokens/${encodeURIComponent(mint)}`,
+      { headers: { accept: 'application/json' } },
+    );
     if (!response.ok) return { name: 'Unknown token', symbol: 'TOKEN' };
 
     const body = await response.json() as {
-      result?: {
-        content?: { metadata?: { name?: string; symbol?: string } };
-        token_info?: { symbol?: string };
-      };
+      pairs?: Array<{ baseToken?: { address?: string; name?: string; symbol?: string } }>;
     };
-
+    const pair = (body.pairs ?? []).find(x => x.baseToken?.address === mint) ?? body.pairs?.[0];
     return {
-      name: body.result?.content?.metadata?.name?.trim() || 'Unknown token',
-      symbol: body.result?.content?.metadata?.symbol?.trim() || body.result?.token_info?.symbol?.trim() || 'TOKEN',
+      name: pair?.baseToken?.name?.trim() || 'Unknown token',
+      symbol: pair?.baseToken?.symbol?.trim() || 'TOKEN',
     };
   } catch {
     return { name: 'Unknown token', symbol: 'TOKEN' };
@@ -49,7 +39,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       return Response.json({ error: 'Enter a valid Solana token mint address.' }, { status: 400 });
     }
 
-    const metadata = await tokenMetadata(env, mint);
+    const metadata = await tokenMetadata(mint);
     const audit = await auditToken(env, {
       mint,
       name: metadata.name,
@@ -59,7 +49,6 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     }, true);
 
     await saveAudit(env, audit);
-
     return Response.json({ audit }, { headers: { 'cache-control': 'no-store' } });
   } catch (error) {
     console.error('manual scan failed', error);

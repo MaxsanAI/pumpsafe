@@ -1,43 +1,60 @@
-# SafePump 🛡️
+# PumpSafe
 
 Production-oriented Solana anti-rug scanner and automated safety recommendation feed.
 
-Stack: Cloudflare Pages + Pages Functions + D1 + KV + Helius webhooks + Solana JSON-RPC + Telegram Bot API + React/Vite.
+Stack: Cloudflare Pages + Pages Functions + D1 + KV + Solana JSON-RPC + Jupiter token metadata + DexScreener + Telegram Bot API + React/Vite.
 
-## Safety gate
+## Solana discovery pipeline
 
-SafePump only publishes a recommendation when all critical controls pass: revoked mint authority, revoked freeze authority, controlled top-holder concentration, acceptable early-launch clustering, sufficient liquidity and 100% LP burn/lock evidence, with a final score of at least 85/100.
+PumpSafe discovers new Pump.fun launches directly from Solana RPC.
 
-## Real-time architecture
+Solana RPC
+-> Pump.fun program signatures
+-> transaction inspection
+-> create / create_v2 instruction detection
+-> TokenCandidate
+-> Jupiter / DexScreener metadata
+-> anti-rug audit
+-> D1
+-> /api/tokens + /api/events
 
-Helius on-chain webhook
--> /api/webhooks/helius
--> websocketListener.ts
--> antiRugService.ts
--> D1 + KV
--> Telegram alert + /api/events SSE
--> React PWA live dashboard
+The discovery cursor is stored in D1 so repeated runs do not rescan the same transaction window. Discovery uses the configured Solana RPC, an optional fallback RPC, and the public Solana endpoint as a final fallback.
 
-SafePump intentionally does not keep a permanent outbound Solana WebSocket inside a Pages Function. Cloudflare recommends Durable Objects for reliable long-lived WebSocket coordination. Helius webhooks provide the event-driven ingestion edge; a future LaserStream/DO consumer can reuse the same audit pipeline.
+## Scanner safety gate
+
+PumpSafe evaluates mint authority, freeze authority, holder concentration, early launch clustering, liquidity and LP evidence before publishing a recommendation.
+
+## API
+
+- POST /api/scan — manually scan a token mint.
+- POST /api/discovery/run — protected Solana discovery run.
+- GET /api/tokens — recent audited tokens.
+- GET /api/events — live SSE feed.
+- GET /api/market — DexScreener market data.
+- GET /api/health — runtime configuration health.
+
+The discovery endpoint requires the DISCOVERY_SECRET environment secret and accepts either Authorization: Bearer <secret> or x-pumpsafe-discovery-secret.
 
 ## Files
 
+- src/services/solanaDiscoveryService.ts — direct Solana/Pump.fun discovery.
 - src/services/antiRugService.ts — authority, holder concentration, launch-cluster, liquidity and LP checks.
-- src/services/websocketListener.ts — real-time event normalization adapter.
+- src/services/tokenMetadataService.ts — Jupiter metadata with DexScreener fallback.
 - src/services/processEvent.ts — enrichment, audit, persistence and Telegram dispatch.
-- functions/api/webhooks/helius.ts — authenticated Helius webhook endpoint.
+- functions/api/discovery/run.ts — protected discovery execution endpoint.
 - functions/api/events.ts — browser SSE stream.
 - functions/api/telegram.ts — Telegram webhook endpoint.
 - web/main.tsx — live dashboard.
 - schema.sql — D1 schema.
-- ARCHITECTURE.md — glossary, Cloudflare dashboard setup, webhook setup and production test plan.
+- ARCHITECTURE.md — deployment and production runbook.
+
+## Deployment
+
+Cloudflare Pages remains the runtime target. No Wrangler configuration is required.
+
+Configure the D1 and KV bindings in the Cloudflare dashboard, then set the runtime variables from .env.example. Set DISCOVERY_SECRET to a long random value before enabling scheduled discovery calls.
 
 ## LP verification
 
-SafePump uses RugCheck's token report summary as the default LP evidence source and requires reported LP locked/burned coverage of 100% before a token can pass the hard gate. You can override the provider with LP_LOCK_API_URL and optionally LP_LOCK_API_KEY.
+PumpSafe uses its configured independent LP evidence source and remains conservative when LP evidence is unavailable.
 
-## Source verification
-
-The source has been statically type-checked with TypeScript using compatibility declarations for the Cloudflare/React runtime. The local environment available for this build could not complete npm dependency installation, so the final Vite production build is intentionally left to the Cloudflare Pages build environment, where package installation occurs from package.json.
-
-See ARCHITECTURE.md for the complete no-Wrangler dashboard deployment procedure.

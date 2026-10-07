@@ -37,4 +37,12 @@ export interface AuditResult {
   liquidityUsd: number | null;
   reason: string;
   recommendation: boolean;
+  imageUrl?: string | null;
+  metadataSource?: string;
+  website?: string | null;
+  twitter?: string | null;
+  telegram?: string | null;
+  verified?: boolean | null;
+  organicScore?: number | null;
+  holderCount?: number | null;
 }

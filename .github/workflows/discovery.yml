@@ -1,0 +1,24 @@
+name: PumpSafe Solana Discovery
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+jobs:
+  discovery:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - name: Run Solana discovery
+        env:
+          PUMPSAFE_DISCOVERY_URL: ${{ secrets.PUMPSAFE_DISCOVERY_URL }}
+          PUMPSAFE_DISCOVERY_SECRET: ${{ secrets.PUMPSAFE_DISCOVERY_SECRET }}
+        run: |
+          set -euo pipefail
+          test -n "$PUMPSAFE_DISCOVERY_URL"
+          test -n "$PUMPSAFE_DISCOVERY_SECRET"
+          curl --fail-with-body --silent --show-error --retry 2 --retry-delay 3 \
+            -X POST "$PUMPSAFE_DISCOVERY_URL/api/discovery/run" \
+            -H "Authorization: Bearer $PUMPSAFE_DISCOVERY_SECRET" \
+            -H "content-type: application/json"

@@ -5,3 +5,35 @@
 
 .scanResultMain{min-width:0;flex:1}.scanResultMain>strong{display:block}.scanResultMain code{word-break:break-all;line-height:1.45}.resultReason{margin:10px 0 0;color:#c7d6dc;font-size:12px;line-height:1.5;max-width:760px}.resultChecks{display:flex;flex-wrap:wrap;gap:7px;margin-top:12px}.resultChecks span{font-size:10px;padding:6px 8px;border-radius:999px;border:1px solid #31434c;color:#a9bac1}.resultChecks .ok{border-color:#5ef2b055;color:#77f3ba}.resultChecks .bad{border-color:#ff6b6b55;color:#ff9696}.resultBlock,.resultPass{min-width:110px;flex-direction:column;align-items:flex-end}.resultBlock b,.resultPass b{display:block}.resultBlock b small,.resultPass b small{font-size:10px;color:#78909d;margin-left:2px}
 @media(max-width:520px){.scanResult{padding:16px}.scanResultMain{width:100%}.resultBlock,.resultPass{width:100%;min-width:0;align-items:flex-start;flex-direction:row;justify-content:space-between;margin-top:4px}.resultReason{font-size:12px}.resultChecks{gap:6px}}
+
+@media(max-width:520px){
+  .brand span{font-size:12px}
+  .status{font-size:11px}
+  .eyebrow{font-size:12px}
+  .sub{font-size:16px}
+  .heroStats span{font-size:10px}
+  .toolbar{font-size:14px}
+  .toolbar button{font-size:13px;padding:10px 14px}
+  .scanner h2{font-size:27px}
+  .scanner p:not(.eyebrow){font-size:15px}
+  .scanner input{font-size:15px;padding:14px}
+  .scanner button{font-size:14px}
+  .scanError{font-size:14px}
+  .scanResult .resultLabel{font-size:11px}
+  .scanResult strong{font-size:18px}
+  .scanResult code{font-size:12px}
+  .resultReason{font-size:14px}
+  .resultChecks span{font-size:12px;padding:7px 9px}
+  .card h2{font-size:23px}
+  .card code{font-size:12px}
+  .reason{font-size:15px}
+  .checks span{font-size:12px;padding:7px 9px}
+  .metrics span{font-size:10px}
+  .metrics b{font-size:14px}
+  .actions a{font-size:12px;padding:11px 5px}
+  footer{font-size:12px}
+  .caRow{display:flex;align-items:center;gap:8px;margin-top:5px}
+  .caRow code{margin-top:0;min-width:0}
+  .copyButton{border:1px solid #31515f;background:#102431;color:#dff9ee;border-radius:9px;padding:6px 9px;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap}
+  .copyButton:active{transform:translateY(1px)}
+}

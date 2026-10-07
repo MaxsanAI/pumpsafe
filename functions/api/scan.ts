@@ -1,5 +1,6 @@
 import { auditToken } from '../../src/services/antiRugService';
 import { saveAudit } from '../../src/lib/store';
+import { resolveTokenMetadata } from '../../src/services/tokenMetadataService';
 import type { Env } from '../../src/lib/types';
 
 const BASE58 = /^[1-9A-HJ-NP-Za-km-z]+$/;
@@ -7,27 +8,6 @@ const BASE58 = /^[1-9A-HJ-NP-Za-km-z]+$/;
 function errorMessage(error: unknown): string {
   if (error instanceof Error && error.message) return error.message;
   return 'Unknown scan error';
-}
-
-async function tokenMetadata(mint: string): Promise<{ name: string; symbol: string }> {
-  try {
-    const response = await fetch(
-      `https://api.dexscreener.com/latest/dex/tokens/${encodeURIComponent(mint)}`,
-      { headers: { accept: 'application/json' } },
-    );
-    if (!response.ok) return { name: 'Unknown token', symbol: 'TOKEN' };
-
-    const body = await response.json() as {
-      pairs?: Array<{ baseToken?: { address?: string; name?: string; symbol?: string } }>;
-    };
-    const pair = (body.pairs ?? []).find(x => x.baseToken?.address === mint) ?? body.pairs?.[0];
-    return {
-      name: pair?.baseToken?.name?.trim() || 'Unknown token',
-      symbol: pair?.baseToken?.symbol?.trim() || 'TOKEN',
-    };
-  } catch {
-    return { name: 'Unknown token', symbol: 'TOKEN' };
-  }
 }
 
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
@@ -39,7 +19,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       return Response.json({ error: 'Enter a valid Solana token mint address.' }, { status: 400 });
     }
 
-    const metadata = await tokenMetadata(mint);
+    const metadata = await resolveTokenMetadata(env, mint);
     const audit = await auditToken(env, {
       mint,
       name: metadata.name,
@@ -47,6 +27,15 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       source: 'manual',
       pumpFun: true,
     }, true);
+
+    audit.imageUrl = metadata.imageUrl;
+    audit.metadataSource = metadata.metadataSource;
+    audit.website = metadata.website;
+    audit.twitter = metadata.twitter;
+    audit.telegram = metadata.telegram;
+    audit.verified = metadata.verified;
+    audit.organicScore = metadata.organicScore;
+    audit.holderCount = metadata.holderCount;
 
     await saveAudit(env, audit);
     return Response.json({ audit }, { headers: { 'cache-control': 'no-store' } });

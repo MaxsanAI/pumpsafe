@@ -4,16 +4,17 @@ import type { Env, TokenCandidate } from '../lib/types';
 export const PUMP_FUN_PROGRAM = '6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P';
 
 const CREATE_DISCRIMINATORS = new Set([
-  // legacy create
+  // Pump.fun legacy create
   '181ec828051c0777',
-  // createV2
+  // Pump.fun create_v2
   'd6904cec5f8b31b4',
 ]);
 
-const DISCOVERY_LIMIT = 100;
-const MAX_TRANSACTIONS_PER_RUN = 30;
+const SIGNATURE_LIMIT = 1000;
+const MAX_TRANSACTIONS_PER_RUN = 200;
+const TRANSACTION_CONCURRENCY = 10;
 
-interface DiscoveryDiagnostics {
+export interface DiscoveryDiagnostics {
   transactionsWithPumpProgram: number;
   outerPumpInstructions: number;
   innerPumpInstructions: number;
@@ -88,12 +89,16 @@ function decodeBase58(value: string): Uint8Array | null {
     }
   }
 
-  for (let i = 0; i < value.length && value[i] === '1'; i++) bytes.push(0);
+  for (let i = 0; i < value.length && value[i] === '1'; i++) {
+    bytes.push(0);
+  }
+
   return Uint8Array.from(bytes.reverse());
 }
 
 function discriminator(data: string | undefined): string | null {
   if (!data) return null;
+
   const decoded = decodeBase58(data);
   if (!decoded || decoded.length < 8) return null;
 
@@ -102,26 +107,60 @@ function discriminator(data: string | undefined): string | null {
     .join('');
 }
 
-function instructionProgramId(instruction: Instruction, keys: AccountKey[]): string | null {
+function instructionProgramId(
+  instruction: Instruction,
+  keys: AccountKey[],
+): string | null {
   if (instruction.programId) return instruction.programId;
+
   if (typeof instruction.programIdIndex === 'number') {
     return accountKeyValue(keys[instruction.programIdIndex]);
   }
+
   return null;
 }
 
-function extractMint(instruction: Instruction, keys: AccountKey[]): string | null {
+function extractMint(
+  instruction: Instruction,
+  keys: AccountKey[],
+): string | null {
+  // Pump.fun create and create_v2 both define account #1 as the mint.
   const first = instruction.accounts?.[0];
 
-  if (typeof first === 'number') return accountKeyValue(keys[first]);
-  if (typeof first === 'string' && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(first)) return first;
+  if (typeof first === 'number') {
+    return accountKeyValue(keys[first]);
+  }
+
+  if (
+    typeof first === 'string' &&
+    /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(first)
+  ) {
+    return first;
+  }
 
   return null;
 }
 
-function isCreateInstruction(instruction: Instruction, keys: AccountKey[]): boolean {
-  if (instructionProgramId(instruction, keys) !== PUMP_FUN_PROGRAM) return false;
-  return CREATE_DISCRIMINATORS.has(discriminator(instruction.data) ?? '');
+function recordDiscriminator(
+  disc: string | null,
+  diagnostics: DiscoveryDiagnostics,
+): void {
+  if (!disc) return;
+
+  if (
+    diagnostics.sampleDiscriminators.length < 24 &&
+    !diagnostics.sampleDiscriminators.includes(disc)
+  ) {
+    diagnostics.sampleDiscriminators.push(disc);
+  }
+
+  if (disc === '181ec828051c0777') {
+    diagnostics.createDiscriminatorHits++;
+  }
+
+  if (disc === 'd6904cec5f8b31b4') {
+    diagnostics.createV2DiscriminatorHits++;
+  }
 }
 
 function candidateFromTransaction(
@@ -136,20 +175,18 @@ function candidateFromTransaction(
   let foundPumpInstruction = false;
 
   const inspect = (instruction: Instruction): TokenCandidate | null => {
-    if (instructionProgramId(instruction, keys) !== PUMP_FUN_PROGRAM) return null;
-
-    foundPumpInstruction = true;
-    const disc = discriminator(instruction.data);
-    if (disc) {
-      if (diagnostics.sampleDiscriminators.length < 12 && !diagnostics.sampleDiscriminators.includes(disc)) {
-        diagnostics.sampleDiscriminators.push(disc);
-      }
-      if (disc === '181ec828051c0777') diagnostics.createDiscriminatorHits++;
-      if (disc === 'd6904cec5f8b31b4') diagnostics.createV2DiscriminatorHits++;
+    if (instructionProgramId(instruction, keys) !== PUMP_FUN_PROGRAM) {
+      return null;
     }
 
-    const isCreate = CREATE_DISCRIMINATORS.has(disc ?? '');
-    if (!isCreate) return null;
+    foundPumpInstruction = true;
+
+    const disc = discriminator(instruction.data);
+    recordDiscriminator(disc, diagnostics);
+
+    if (!CREATE_DISCRIMINATORS.has(disc ?? '')) {
+      return null;
+    }
 
     const mint = extractMint(instruction, keys);
     if (!mint) return null;
@@ -168,6 +205,7 @@ function candidateFromTransaction(
     if (instructionProgramId(instruction, keys) === PUMP_FUN_PROGRAM) {
       diagnostics.outerPumpInstructions++;
     }
+
     const candidate = inspect(instruction);
     if (candidate) return candidate;
   }
@@ -177,17 +215,25 @@ function candidateFromTransaction(
       if (instructionProgramId(instruction, keys) === PUMP_FUN_PROGRAM) {
         diagnostics.innerPumpInstructions++;
       }
+
       const candidate = inspect(instruction);
       if (candidate) return candidate;
     }
   }
 
-  if (foundPumpInstruction) diagnostics.transactionsWithPumpProgram++;
+  if (foundPumpInstruction) {
+    diagnostics.transactionsWithPumpProgram++;
+  }
+
   return null;
 }
 
 async function ensureDiscoveryState(env: Env): Promise<void> {
-  await env.DB.prepare('CREATE TABLE IF NOT EXISTS discovery_state (id TEXT PRIMARY KEY, cursor_signature TEXT, updated_at INTEGER NOT NULL)').run();
+  await env.DB
+    .prepare(
+      'CREATE TABLE IF NOT EXISTS discovery_state (id TEXT PRIMARY KEY, cursor_signature TEXT, updated_at INTEGER NOT NULL)',
+    )
+    .run();
 }
 
 async function getCursor(env: Env): Promise<string | null> {
@@ -204,9 +250,37 @@ async function getCursor(env: Env): Promise<string | null> {
 async function setCursor(env: Env, signature: string): Promise<void> {
   await ensureDiscoveryState(env);
 
-  await env.DB.prepare('INSERT INTO discovery_state (id,cursor_signature,updated_at) VALUES (?,?,?) ON CONFLICT(id) DO UPDATE SET cursor_signature=excluded.cursor_signature,updated_at=excluded.updated_at')
+  await env.DB
+    .prepare(
+      'INSERT INTO discovery_state (id,cursor_signature,updated_at) VALUES (?,?,?) ON CONFLICT(id) DO UPDATE SET cursor_signature=excluded.cursor_signature,updated_at=excluded.updated_at',
+    )
     .bind('pumpfun', signature, Date.now())
     .run();
+}
+
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  worker: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let nextIndex = 0;
+
+  async function runWorker(): Promise<void> {
+    while (true) {
+      const index = nextIndex++;
+      if (index >= items.length) return;
+
+      results[index] = await worker(items[index]);
+    }
+  }
+
+  const workerCount = Math.min(concurrency, items.length);
+  await Promise.all(
+    Array.from({ length: workerCount }, () => runWorker()),
+  );
+
+  return results;
 }
 
 export interface DiscoveryResult {
@@ -217,27 +291,33 @@ export interface DiscoveryResult {
   diagnostics: DiscoveryDiagnostics;
 }
 
-export async function discoverPumpFunTokens(env: Env): Promise<DiscoveryResult> {
+export async function discoverPumpFunTokens(
+  env: Env,
+): Promise<DiscoveryResult> {
   const cursor = await getCursor(env);
+
+  const config: Record<string, unknown> = {
+    limit: SIGNATURE_LIMIT,
+  };
+
+  // The cursor represents the oldest signature successfully scanned in the
+  // previous run. "until" makes the next scan incremental instead of
+  // repeatedly rescanning the same newest transactions.
+  if (cursor) {
+    config.until = cursor;
+  }
 
   const signatures = await rpc<SignatureInfo[]>(
     env.SOLANA_RPC_URL,
     'getSignaturesForAddress',
-    [PUMP_FUN_PROGRAM, { limit: DISCOVERY_LIMIT }],
+    [PUMP_FUN_PROGRAM, config],
   );
 
-  const cursorIndex = cursor
-    ? signatures.findIndex(item => item.signature === cursor)
-    : -1;
-
-  const pending = cursorIndex >= 0
-    ? signatures.slice(0, cursorIndex)
-    : signatures;
-
-  const batch = pending.slice(0, MAX_TRANSACTIONS_PER_RUN);
+  const batch = signatures
+    .filter(signature => !signature.err)
+    .slice(0, MAX_TRANSACTIONS_PER_RUN);
 
   const candidates = new Map<string, TokenCandidate>();
-  let transactionsChecked = 0;
   const diagnostics: DiscoveryDiagnostics = {
     transactionsWithPumpProgram: 0,
     outerPumpInstructions: 0,
@@ -247,33 +327,56 @@ export async function discoverPumpFunTokens(env: Env): Promise<DiscoveryResult> 
     sampleDiscriminators: [],
   };
 
-  for (const signature of batch) {
-    const tx = await rpc<TransactionResponse | null>(
-      env.SOLANA_RPC_URL,
-      'getTransaction',
-      [
-        signature.signature,
-        { encoding: 'jsonParsed', maxSupportedTransactionVersion: 1 },
-      ],
+  const transactionResults = await mapWithConcurrency(
+    batch,
+    TRANSACTION_CONCURRENCY,
+    async signature => {
+      const tx = await rpc<TransactionResponse | null>(
+        env.SOLANA_RPC_URL,
+        'getTransaction',
+        [
+          signature.signature,
+          {
+            encoding: 'jsonParsed',
+            maxSupportedTransactionVersion: 1,
+          },
+        ],
+      );
+
+      return {
+        signature,
+        tx,
+      };
+    },
+  );
+
+  for (const result of transactionResults) {
+    if (!result.tx) continue;
+
+    const candidate = candidateFromTransaction(
+      result.signature,
+      result.tx,
+      diagnostics,
     );
 
-    transactionsChecked++;
-
-    if (tx) {
-      const candidate = candidateFromTransaction(signature, tx, diagnostics);
-      if (candidate) candidates.set(candidate.mint, candidate);
+    if (candidate) {
+      candidates.set(candidate.mint, candidate);
     }
   }
 
   if (batch.length > 0) {
+    // Store the oldest transaction actually scanned, not merely the oldest
+    // signature returned by the RPC. This keeps pagination deterministic.
     await setCursor(env, batch[batch.length - 1].signature);
   }
 
   return {
     signaturesChecked: signatures.length,
-    transactionsChecked,
+    transactionsChecked: batch.length,
     candidates: [...candidates.values()],
-    cursor: batch.length ? batch[batch.length - 1].signature : cursor,
+    cursor: batch.length
+      ? batch[batch.length - 1].signature
+      : cursor,
     diagnostics,
   };
 }

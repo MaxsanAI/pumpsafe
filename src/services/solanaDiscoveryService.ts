@@ -4,7 +4,9 @@ import type { Env, TokenCandidate } from '../lib/types';
 export const PUMP_FUN_PROGRAM = '6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P';
 
 const CREATE_DISCRIMINATORS = new Set([
+  // legacy create
   '121ec828051c0777',
+  // createV2
   'd6904cec5f8b31b4',
 ]);
 
@@ -175,13 +177,17 @@ export async function discoverPumpFunTokens(env: Env): Promise<DiscoveryResult> 
     ? signatures.findIndex(item => item.signature === cursor)
     : -1;
 
+  // The RPC returns newest -> oldest. If the cursor is still inside the
+  // returned window, everything before it is new. If the cursor has fallen
+  // outside the window, continue from the newest page rather than stopping.
   const pending = cursorIndex >= 0
     ? signatures.slice(0, cursorIndex)
     : signatures;
 
-  const batch = pending
-    .slice(0, MAX_TRANSACTIONS_PER_RUN)
-    .reverse();
+  // Process newest transactions first so newly launched coins are discovered
+  // immediately. The cursor is advanced to the oldest transaction actually
+  // inspected, not back to the newest one.
+  const batch = pending.slice(0, MAX_TRANSACTIONS_PER_RUN);
 
   const candidates = new Map<string, TokenCandidate>();
   let transactionsChecked = 0;

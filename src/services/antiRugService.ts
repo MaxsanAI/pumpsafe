@@ -115,11 +115,23 @@ export async function auditToken(env: Env, candidate: TokenCandidate, deepScan =
   if (liq.usd == null || liq.usd < minLiquidity) score -= 10;
   score = Math.max(0, Math.min(100, score));
 
-  const hardGate = mintAuthorityDisabled && freezeAuthorityDisabled && lpVerified && holders.top10Pct <= 35 && (deepScan ? risks.bundleRisk < 45 : true) && (liq.usd ?? 0) >= minLiquidity;
-  const recommendation = hardGate && score >= 85;
+  const safetyThreshold = 60;
+  const criticalAuthorityRisk = !mintAuthorityDisabled || !freezeAuthorityDisabled;
+  const recommendation = score >= safetyThreshold && !criticalAuthorityRisk;
+  const reasons: string[] = [];
+  if (!mintAuthorityDisabled) reasons.push('mint authority is still active');
+  if (!freezeAuthorityDisabled) reasons.push('freeze authority is still active');
+  if (!lpVerified) reasons.push('LP burn/lock is not independently verified');
+  if (holders.top10Pct > 50) reasons.push(`top 10 holders control ${holders.top10Pct.toFixed(1)}%`);
+  else if (holders.top10Pct > 35) reasons.push(`elevated holder concentration at ${holders.top10Pct.toFixed(1)}%`);
+  if (deepScan && risks.bundleRisk >= 45) reasons.push(`launch clustering risk ${risks.bundleRisk}/100`);
+  if ((liq.usd ?? 0) < minLiquidity) reasons.push(`liquidity is below ${Math.round(minLiquidity).toLocaleString()}`);
+  if (score < safetyThreshold) reasons.push(`risk score is below the ${safetyThreshold}/100 safety threshold`);
   const reason = recommendation
-    ? deepScan ? 'Passed the hard safety gate: authorities revoked, holder concentration controlled, launch-cluster risk low and liquidity evidence verified.' : 'Passed the lightweight safety gate: authorities revoked, holder concentration controlled and liquidity evidence verified.'
-    : `Rejected from recommendations: ${!mintAuthorityDisabled ? 'mint authority active; ' : ''}${!freezeAuthorityDisabled ? 'freeze authority active; ' : ''}${!lpVerified ? 'LP burn/lock not independently verified; ' : ''}${holders.top10Pct > 35 ? 'holder concentration too high; ' : ''}${deepScan && risks.bundleRisk >= 45 ? 'launch clustering too high; ' : ''}${(liq.usd ?? 0) < minLiquidity ? 'liquidity below threshold.' : ''}`;
+    ? reasons.length > 0
+      ? `SAFE at ${safetyThreshold}/100 threshold, with noted risks: ${reasons.join('; ')}.`
+      : `SAFE: score ${score}/100 with both token authorities revoked.`
+    : `RUG RISK: ${reasons.length > 0 ? reasons.join('; ') + '.' : `risk score ${score}/100 is below the ${safetyThreshold}/100 safety threshold.`}`;
 
   return { mint: candidate.mint, name: candidate.name, symbol: candidate.symbol, score, source: candidate.source, detectedAt: Date.now(), mintAuthorityDisabled, freezeAuthorityDisabled, top10Pct: holders.top10Pct, lpVerified, bundleRisk: risks.bundleRisk, devRisk: risks.devRisk, liquidityUsd: liq.usd, reason, recommendation };
 }

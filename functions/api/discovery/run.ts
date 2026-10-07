@@ -18,17 +18,11 @@ function errorMessage(error: unknown): string {
   return String(error || 'Unknown discovery error');
 }
 
-async function handleDiscovery(
-  request: Request,
-  env: Env,
-): Promise<Response> {
+async function handleDiscovery(request: Request, env: Env): Promise<Response> {
   if (!authorized(request, env)) {
     return Response.json(
       { error: 'Unauthorized discovery request.' },
-      {
-        status: 401,
-        headers: { 'cache-control': 'no-store' },
-      },
+      { status: 401, headers: { 'cache-control': 'no-store' } },
     );
   }
 
@@ -64,28 +58,23 @@ async function handleDiscovery(
           transactionsChecked: discovery.transactionsChecked,
           candidates: discovery.candidates.length,
           cursor: discovery.cursor,
+          diagnostics: discovery.diagnostics,
         },
         processed,
         failed,
       },
-      {
-        headers: { 'cache-control': 'no-store' },
-      },
+      { headers: { 'cache-control': 'no-store' } },
     );
   } catch (error) {
     console.error('solana discovery failed', error);
 
     return Response.json(
       { error: 'Discovery failed: ' + errorMessage(error) },
-      {
-        status: 500,
-        headers: { 'cache-control': 'no-store' },
-      },
+      { status: 500, headers: { 'cache-control': 'no-store' } },
     );
   }
 }
 
-// Explicit method handlers remove any ambiguity in Pages' method routing.
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) =>
   handleDiscovery(request, env);
 

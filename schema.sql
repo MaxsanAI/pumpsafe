@@ -15,8 +15,17 @@ CREATE TABLE IF NOT EXISTS tokens (
   reason TEXT NOT NULL,
   recommendation INTEGER NOT NULL DEFAULT 0
 );
-CREATE INDEX IF NOT EXISTS idx_tokens_recommendation_detected ON tokens(recommendation, detected_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_tokens_recommendation_detected
+  ON tokens(recommendation, detected_at DESC);
+
 CREATE TABLE IF NOT EXISTS processed_events (
   signature TEXT PRIMARY KEY,
   processed_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS discovery_state (
+  id TEXT PRIMARY KEY,
+  cursor_signature TEXT,
+  updated_at INTEGER NOT NULL
 );

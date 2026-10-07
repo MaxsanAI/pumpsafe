@@ -14,6 +14,10 @@ function rpcUrls(primary: string | undefined, fallback?: string): string[] {
   return [...new Set(urls)];
 }
 
+function isRetryableHttpStatus(status: number): boolean {
+  return status === 401 || status === 403 || status === 408 || status === 429 || status >= 500;
+}
+
 export async function rpc<T>(
   url: string | undefined,
   method: string,
@@ -41,8 +45,17 @@ export async function rpc<T>(
         });
 
         if (!response.ok) {
-          const retryable = response.status === 429 || response.status >= 500;
-          throw Object.assign(new Error(`RPC HTTP ${response.status}`), { retryable });
+          const retryable = isRetryableHttpStatus(response.status);
+          const error = Object.assign(
+            new Error(`RPC HTTP ${response.status}`),
+            { retryable },
+          );
+
+          lastError = error;
+
+          if (response.status === 401 || response.status === 403) break;
+
+          throw error;
         }
 
         const body = await response.json() as {

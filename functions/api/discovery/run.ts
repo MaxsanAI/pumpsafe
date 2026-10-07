@@ -18,20 +18,10 @@ function errorMessage(error: unknown): string {
   return String(error || 'Unknown discovery error');
 }
 
-export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
-  if (request.method !== 'POST') {
-    return Response.json(
-      { error: 'Method not allowed. Use POST.' },
-      {
-        status: 405,
-        headers: {
-          allow: 'POST',
-          'cache-control': 'no-store',
-        },
-      },
-    );
-  }
-
+async function handleDiscovery(
+  request: Request,
+  env: Env,
+): Promise<Response> {
   if (!authorized(request, env)) {
     return Response.json(
       { error: 'Unauthorized discovery request.' },
@@ -93,4 +83,24 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
       },
     );
   }
-};
+}
+
+// Explicit method handlers remove any ambiguity in Pages' method routing.
+export const onRequestPost: PagesFunction<Env> = async ({ request, env }) =>
+  handleDiscovery(request, env);
+
+export const onRequestGet: PagesFunction<Env> = async () =>
+  Response.json(
+    {
+      ok: true,
+      route: '/api/discovery/run',
+      method: 'GET',
+      message: 'PumpSafe discovery endpoint is deployed. Use POST to run discovery.',
+    },
+    {
+      headers: {
+        'cache-control': 'no-store',
+        allow: 'POST, GET',
+      },
+    },
+  );

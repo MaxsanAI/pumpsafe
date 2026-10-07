@@ -23,7 +23,7 @@ type Token = {
   recommendation?: boolean;
 };
 
-const short = (v: string) => v.slice(0, 5) + '…' + v.slice(-5);
+const short = (v: string) => v.slice(0, 6) + '…' + v.slice(-4);
 
 const links = (mint: string) => ({
   dex: 'https://dexscreener.com/solana/' + mint,
@@ -32,6 +32,22 @@ const links = (mint: string) => ({
   trojan: 'https://t.me/solana_trojanbot?start=r-ref-' + mint,
   pump: 'https://pump.fun/' + mint,
 });
+
+async function copyMint(mint: string) {
+  try {
+    await navigator.clipboard.writeText(mint);
+  } catch {
+    const area = document.createElement('textarea');
+    area.value = mint;
+    area.style.position = 'fixed';
+    area.style.opacity = '0';
+    document.body.appendChild(area);
+    area.focus();
+    area.select();
+    document.execCommand('copy');
+    area.remove();
+  }
+}
 
 function App() {
   const [tokens, setTokens] = useState<Token[]>([]);
@@ -284,7 +300,12 @@ function TokenCard({ token }: { token: Token }) {
         <div>
           <div className="symbol">{'$' + (token.symbol || 'TOKEN')}</div>
           <h2>{token.name || 'Unknown token'}</h2>
-          <code>{short(token.mint)}</code>
+          <div className="caRow">
+            <code>CA: {short(token.mint)}</code>
+            <button type="button" className="copyButton" onClick={() => void copyMint(token.mint)}>
+              Copy
+            </button>
+          </div>
         </div>
 
         <div className={token.recommendation ? 'score safe' : 'score rug'}>

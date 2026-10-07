@@ -2,8 +2,7 @@ export interface Env {
   DB: D1Database;
   CACHE: KVNamespace;
   SOLANA_RPC_URL: string;
-  HELIUS_API_KEY: string;
-  HELIUS_WEBHOOK_SECRET: string;
+  SOLANA_RPC_FALLBACK_URL?: string;
   TELEGRAM_BOT_TOKEN: string;
   TELEGRAM_CHAT_ID: string;
   TELEGRAM_WEBHOOK_SECRET?: string;

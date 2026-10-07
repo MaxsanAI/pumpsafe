@@ -18,7 +18,26 @@ jobs:
           set -euo pipefail
           test -n "$PUMPSAFE_DISCOVERY_URL"
           test -n "$PUMPSAFE_DISCOVERY_SECRET"
-          curl --fail-with-body --silent --show-error --retry 2 --retry-delay 3 \
-            -X POST "$PUMPSAFE_DISCOVERY_URL/api/discovery/run" \
+
+          BASE_URL="${PUMPSAFE_DISCOVERY_URL%/}"
+          BASE_URL="${BASE_URL%/api/discovery/run}"
+          ENDPOINT="$BASE_URL/api/discovery/run"
+
+          echo "Testing PumpSafe health endpoint..."
+          curl --silent --show-error --fail-with-body --retry 2 --retry-delay 3 \
+            "$BASE_URL/api/health"
+
+          echo
+          echo "Running PumpSafe Solana discovery..."
+          RESPONSE_FILE="$(mktemp)"
+          HTTP_CODE="$(curl --silent --show-error --retry 2 --retry-delay 3 \
+            --output "$RESPONSE_FILE" --write-out '%{http_code}' \
+            -X POST "$ENDPOINT" \
             -H "Authorization: Bearer $PUMPSAFE_DISCOVERY_SECRET" \
-            -H "content-type: application/json"
+            -H "content-type: application/json")"
+
+          echo "HTTP status: $HTTP_CODE"
+          cat "$RESPONSE_FILE"
+          echo
+
+          test "$HTTP_CODE" = "200"

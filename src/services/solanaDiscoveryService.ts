@@ -198,7 +198,7 @@ export async function discoverPumpFunTokens(env: Env): Promise<DiscoveryResult> 
       'getTransaction',
       [
         signature.signature,
-        { encoding: 'jsonParsed', maxSupportedTransactionVersion: 0 },
+        { encoding: 'jsonParsed', maxSupportedTransactionVersion: 1 },
       ],
     );
 

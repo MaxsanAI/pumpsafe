@@ -5,9 +5,11 @@ import type { Env } from '../../../src/lib/types';
 function authorized(request: Request, env: Env): boolean {
   const secret = env.DISCOVERY_SECRET?.trim();
   if (!secret) return false;
+
   const header = request.headers.get('authorization') ?? '';
   const token = header.startsWith('Bearer ') ? header.slice(7).trim() : '';
   const direct = request.headers.get('x-pumpsafe-discovery-secret')?.trim() ?? '';
+
   return token === secret || direct === secret;
 }
 
@@ -16,9 +18,28 @@ function errorMessage(error: unknown): string {
   return String(error || 'Unknown discovery error');
 }
 
-export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
+export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
+  if (request.method !== 'POST') {
+    return Response.json(
+      { error: 'Method not allowed. Use POST.' },
+      {
+        status: 405,
+        headers: {
+          allow: 'POST',
+          'cache-control': 'no-store',
+        },
+      },
+    );
+  }
+
   if (!authorized(request, env)) {
-    return Response.json({ error: 'Unauthorized discovery request.' }, { status: 401, headers: { 'cache-control': 'no-store' } });
+    return Response.json(
+      { error: 'Unauthorized discovery request.' },
+      {
+        status: 401,
+        headers: { 'cache-control': 'no-store' },
+      },
+    );
   }
 
   try {
@@ -28,30 +49,48 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
     for (let i = 0; i < discovery.candidates.length; i += 2) {
       const batch = discovery.candidates.slice(i, i + 2);
-      await Promise.all(batch.map(async candidate => {
-        try {
-          const result = await processCandidate(env, candidate, true);
-          if (result.processed) processed.push(candidate.mint);
-        } catch (error) {
-          failed.push({ mint: candidate.mint, error: errorMessage(error) });
-        }
-      }));
+
+      await Promise.all(
+        batch.map(async candidate => {
+          try {
+            const result = await processCandidate(env, candidate, true);
+            if (result.processed) processed.push(candidate.mint);
+          } catch (error) {
+            failed.push({
+              mint: candidate.mint,
+              error: errorMessage(error),
+            });
+          }
+        }),
+      );
     }
 
-    return Response.json({
-      ok: true,
-      source: 'solana-rpc',
-      discovery: {
-        signaturesChecked: discovery.signaturesChecked,
-        transactionsChecked: discovery.transactionsChecked,
-        candidates: discovery.candidates.length,
-        cursor: discovery.cursor,
+    return Response.json(
+      {
+        ok: true,
+        source: 'solana-rpc',
+        discovery: {
+          signaturesChecked: discovery.signaturesChecked,
+          transactionsChecked: discovery.transactionsChecked,
+          candidates: discovery.candidates.length,
+          cursor: discovery.cursor,
+        },
+        processed,
+        failed,
       },
-      processed,
-      failed,
-    }, { headers: { 'cache-control': 'no-store' } });
+      {
+        headers: { 'cache-control': 'no-store' },
+      },
+    );
   } catch (error) {
     console.error('solana discovery failed', error);
-    return Response.json({ error: 'Discovery failed: ' + errorMessage(error) }, { status: 500, headers: { 'cache-control': 'no-store' } });
+
+    return Response.json(
+      { error: 'Discovery failed: ' + errorMessage(error) },
+      {
+        status: 500,
+        headers: { 'cache-control': 'no-store' },
+      },
+    );
   }
 };

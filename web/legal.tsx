@@ -1,5 +1,4 @@
 import React from 'react';
-import { createRoot } from 'react-dom/client';
 import './styles.css';
 
 type Page = {
@@ -107,6 +106,4 @@ function LegalPage({page}:{page:Page}){
   return <div className="legalShell"><header className="topbar"><a className="brand legalBrand" href="/"><div className="logo">◉</div><div><strong>PumpSafe</strong><span>Solana token intelligence</span></div></a><a className="legalBack" href="/">← Back to scanner</a></header><main className="legalMain"><div className="legalHero"><p className="eyebrow">{page.eyebrow}</p><h1>{page.title}</h1><p>{page.intro}</p></div><article className="legalCard">{page.sections.map((s,i)=><section key={i}><h2>{s.title}</h2>{s.body}</section>)}</article><div className="legalNav"><a href="/about">About</a><a href="/methodology">Methodology</a><a href="/risk-disclosure">Risk Disclosure</a><a href="/terms">Terms</a><a href="/privacy">Privacy</a><a href="/cookies">Cookies</a><a href="/acceptable-use">Acceptable Use</a><a href="/security">Security</a><a href="/contact">Contact</a></div></main></div>;
 }
 
-const path=window.location.pathname.replace(/\/$/,'')||'/';
-const page=pages[path];
-if(page) createRoot(document.getElementById('root')!).render(<LegalPage page={page}/>);
+export { LegalPage, pages };

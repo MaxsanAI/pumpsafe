@@ -5,7 +5,7 @@ export const PUMP_FUN_PROGRAM = '6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P';
 
 const CREATE_DISCRIMINATORS = new Set([
   // legacy create
-  '121ec828051c0777',
+  '181ec828051c0777',
   // createV2
   'd6904cec5f8b31b4',
 ]);
@@ -32,10 +32,19 @@ type Instruction = {
   parsed?: unknown;
 };
 
+type InnerInstructionGroup = {
+  index: number;
+  instructions?: Instruction[];
+};
+
 type TransactionResponse = {
   slot: number;
   blockTime?: number | null;
-  meta?: { err?: unknown; logMessages?: string[] | null } | null;
+  meta?: {
+    err?: unknown;
+    logMessages?: string[] | null;
+    innerInstructions?: InnerInstructionGroup[] | null;
+  } | null;
   transaction?: {
     message?: {
       accountKeys?: AccountKey[];
@@ -131,6 +140,25 @@ function candidateFromTransaction(
     };
   }
 
+  // CPI instructions are exposed by Solana under meta.innerInstructions.
+  for (const group of tx.meta?.innerInstructions ?? []) {
+    for (const instruction of group.instructions ?? []) {
+      if (!isCreateInstruction(instruction, keys)) continue;
+
+      const mint = extractMint(instruction, keys);
+      if (!mint) continue;
+
+      return {
+        mint,
+        name: 'Unknown',
+        symbol: 'TOKEN',
+        source: 'pump.fun',
+        signature: signature.signature,
+        pumpFun: true,
+      };
+    }
+  }
+
   return null;
 }
 
@@ -177,16 +205,10 @@ export async function discoverPumpFunTokens(env: Env): Promise<DiscoveryResult> 
     ? signatures.findIndex(item => item.signature === cursor)
     : -1;
 
-  // The RPC returns newest -> oldest. If the cursor is still inside the
-  // returned window, everything before it is new. If the cursor has fallen
-  // outside the window, continue from the newest page rather than stopping.
   const pending = cursorIndex >= 0
     ? signatures.slice(0, cursorIndex)
     : signatures;
 
-  // Process newest transactions first so newly launched coins are discovered
-  // immediately. The cursor is advanced to the oldest transaction actually
-  // inspected, not back to the newest one.
   const batch = pending.slice(0, MAX_TRANSACTIONS_PER_RUN);
 
   const candidates = new Map<string, TokenCandidate>();

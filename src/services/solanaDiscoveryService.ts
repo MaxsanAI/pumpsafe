@@ -10,9 +10,9 @@ const CREATE_DISCRIMINATORS = new Set([
   'd6904cec5f8b31b4',
 ]);
 
-const SIGNATURE_LIMIT = 1000;
-const MAX_TRANSACTIONS_PER_RUN = 500;
-const TRANSACTION_CONCURRENCY = 20;
+const SIGNATURE_LIMIT = 20;
+const MAX_TRANSACTIONS_PER_RUN = 20;
+const TRANSACTION_CONCURRENCY = 5;
 
 export interface DiscoveryDiagnostics {
   transactionsWithPumpProgram: number;

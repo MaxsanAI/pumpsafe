@@ -1,0 +1,21 @@
+name: Deploy PumpPortal Relay
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "pumpportal-relay/**"
+      - ".github/workflows/deploy-pumpportal-relay.yml"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Deploy PumpPortal Relay
+        run: npx wrangler@latest deploy --config pumpportal-relay/wrangler.jsonc
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

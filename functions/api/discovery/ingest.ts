@@ -65,7 +65,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       pumpFun: true,
     };
 
-    const result = await processCandidate(env, candidate, true);
+    const result = await processCandidate(env, candidate, false);
 
     return Response.json(
       {

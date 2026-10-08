@@ -135,11 +135,6 @@ export class PumpPortalRelay extends DurableObject<Env> {
     ws.accept();
     this.upstream = ws;
 
-    ws.addEventListener('open', () => {
-      ws.send(JSON.stringify({ method: 'subscribeNewToken' }));
-      ws.send(JSON.stringify({ method: 'subscribeMigration' }));
-    });
-
     ws.addEventListener('message', event => {
       this.ctx.waitUntil(this.handleMessage(event.data));
     });

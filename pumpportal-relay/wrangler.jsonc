@@ -1,0 +1,30 @@
+{
+  "$schema": "https://developers.cloudflare.com/workers/wrangler/config-schema.json",
+  "name": "pumpsafe-pumpportal-relay",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-08",
+  "observability": {
+    "enabled": true
+  },
+  "triggers": {
+    "crons": [
+      "*/5 * * * *"
+    ]
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "RELAY",
+        "class_name": "PumpPortalRelay"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": [
+        "PumpPortalRelay"
+      ]
+    }
+  ]
+}

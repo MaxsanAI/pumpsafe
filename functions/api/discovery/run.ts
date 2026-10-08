@@ -31,8 +31,8 @@ async function handleDiscovery(request: Request, env: Env): Promise<Response> {
     const processed: string[] = [];
     const failed: Array<{ mint: string; error: string }> = [];
 
-    for (let i = 0; i < discovery.candidates.length; i += 2) {
-      const batch = discovery.candidates.slice(i, i + 2);
+    for (let i = 0; i < discovery.candidates.length; i += 1) {
+      const batch = discovery.candidates.slice(i, i + 1);
 
       await Promise.all(
         batch.map(async candidate => {
